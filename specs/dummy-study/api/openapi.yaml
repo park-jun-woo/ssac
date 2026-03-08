@@ -85,6 +85,16 @@ paths:
       operationId: ListMyReservations
       security:
         - bearerAuth: []
+      x-pagination:
+        style: offset
+        defaultLimit: 20
+        maxLimit: 100
+      x-sort:
+        allowed: [StartAt, CreatedAt]
+        default: StartAt
+        direction: desc
+      x-filter:
+        allowed: [Status, RoomID]
       responses:
         "200":
           description: 내 예약 목록
@@ -200,6 +210,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Reservation"
+        total:
+          type: integer
 
     Reservation:
       type: object

@@ -168,7 +168,7 @@ func TestGenerateModelInterfaces(t *testing.T) {
 		{"ReservationModel", "type ReservationModel interface"},
 		{"Create with time", "startAt time.Time, endAt time.Time"},
 		{"FindByID", "FindByID(reservationID string) (*Reservation, error)"},
-		{"ListByUserID many", "ListByUserID(userID string) ([]Reservation, error)"},
+		{"ListByUserID many+pagination", "ListByUserID(userID string, opts QueryOpts) ([]Reservation, int, error)"},
 		{"UpdateStatus exec", "UpdateStatus(reservationID string) error"},
 		{"RoomModel", "type RoomModel interface"},
 		{"Room Update", "Update(roomID string, name string, capacity int64, location string) error"},
