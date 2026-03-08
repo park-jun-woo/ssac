@@ -1,6 +1,8 @@
 # SSaC — Service Sequences as Code
 
-A CLI tool that parses declarative service logic from Go comments and generates Go implementation code.
+Service logic is a series of decisions: which model to query, what to guard against, when to reject, what to return. These decisions belong to the person who understands the business — but they get buried in boilerplate, scattered across layers, and lost in rewrites.
+
+SSaC preserves those decisions as a declarative spec. You declare **what** happens and **in what order**. The tool generates the implementation.
 
 ```
 specs/service/*.go  →  ssac validate  →  ssac gen  →  artifacts/service/*.go
@@ -9,9 +11,11 @@ specs/service/*.go  →  ssac validate  →  ssac gen  →  artifacts/service/*.
 
 ## Core Idea
 
-Every sequence follows a binary contract: **succeed → next line, fail → return**. If a block can't follow this contract, it's not a sequence — delegate it to `call`. The 10 types are closed because these are all the service-layer operations that naturally follow this contract.
+Every service function is a sequence of steps. Each step follows a binary contract: **succeed → next line, fail → return**. This is not an abstraction we invented — it's how service logic already works. SSaC makes it explicit.
 
-Declare the execution flow inside service functions using these 10 fixed sequence types, and let symbolic codegen produce the implementation. No LLM required — runs purely on templates.
+10 fixed sequence types cover all service-layer operations that follow this contract. If something doesn't fit, delegate it to `call`. The set is closed by design.
+
+No LLM, no inference — pure symbolic codegen from templates. The spec is the source of truth.
 
 ```go
 // @sequence get
