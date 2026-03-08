@@ -158,7 +158,11 @@ Effects on codegen:
 cmd/ssac/                        # CLI entrypoint
 parser/                          # Comments → []ServiceFunc
 validator/                       # Internal + external SSOT validation
-generator/                       # Type-based templates → Go code, model interface derivation
+generator/                       # Target interface → multi-language codegen (Go default)
+  target.go                      #   Target interface + DefaultTarget()
+  go_target.go                   #   GoTarget: Go code generation
+  go_templates.go                #   Go templates
+  generator.go                   #   Backward-compatible wrappers + utils
 specs/                           # Declarations (SSOT)
   dummy-study/                   #   Study room reservation demo project
     service/  db/queries/  api/  model/
@@ -187,7 +191,7 @@ files/                           # Design documents
 go test ./parser/... ./validator/... ./generator/... -v
 ```
 
-50 tests: parser 14 + generator 6 + validator 30
+51 tests: parser 14 + generator 7 + validator 30
 
 ## License
 

@@ -43,7 +43,11 @@ Go 1.24+, `go/ast`(파싱), `text/template`(코드젠), `gopkg.in/yaml.v3`(OpenA
 cmd/ssac/main.go                 # CLI 진입점
 parser/                          # 주석 → []ServiceFunc
 validator/                       # 내부 + 외부 SSOT 검증
-generator/                       # 타입별 템플릿 → Go 코드, 모델 인터페이스 파생
+generator/                       # Target 인터페이스 기반 코드젠 (다중 언어 확장 가능)
+  target.go                      #   Target 인터페이스 + DefaultTarget()
+  go_target.go                   #   GoTarget: Go 코드 생성 구현
+  go_templates.go                #   Go 템플릿
+  generator.go                   #   하위 호환 래퍼 (Generate, GenerateWith) + 유틸
 specs/                           # 선언 (입력, SSOT)
   dummy-study/                   #   스터디룸 예약 더미 프로젝트
     service/  db/queries/  api/  model/

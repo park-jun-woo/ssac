@@ -2,7 +2,7 @@ package generator
 
 import "text/template"
 
-var templates = template.Must(template.New("").Parse(`
+var goTemplates = template.Must(template.New("").Parse(`
 {{- define "authorize" -}}
 	// authorize
 	allowed, err := authz.Check(currentUser, "{{.Action}}", "{{.Resource}}", {{.ID}})
