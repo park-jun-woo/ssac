@@ -16,8 +16,8 @@ go.sum
 .DS_Store
 Thumbs.db
 
-# Generated service code (codegen output)
-artifacts/backend/internal/service/
+# Test output (codegen output)
+testdata/*_test/
 
 # Claude Code
 .claude/

@@ -86,7 +86,7 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 ## Install & Run
 
 ```bash
-go build -o ssac ./artifacts/cmd/ssac
+go build -o ssac ./cmd/ssac
 
 ssac parse [dir]              # Print parsed sequence structure
 ssac validate [dir]           # Internal + external SSOT cross-validation
@@ -152,19 +152,19 @@ Effects on codegen:
 ## Project Structure
 
 ```
+cmd/ssac/                        # CLI entrypoint
+parser/                          # Comments → []ServiceFunc
+validator/                       # Internal + external SSOT validation
+generator/                       # Type-based templates → Go code, model interface derivation
 specs/                           # Declarations (SSOT)
-  backend/service/               #   Example specs
   dummy-study/                   #   Study room reservation demo project
     service/  db/queries/  api/  model/
   plans/                         #   Implementation plans
-artifacts/                       # Output (code)
-  cmd/ssac/                      #   CLI entrypoint
-  internal/parser/               #   Comments → []ServiceFunc
-  internal/generator/            #   Type-based templates → Go code
-  internal/generator/model_interface.go  # Model interface derivation
-  internal/validator/            #   Internal + external validation
+artifacts/                       # Documentation
   manual-for-human.md            #   Detailed manual
   manual-for-ai.md               #   Compact AI reference
+testdata/                        # Test fixtures
+files/                           # Design documents
 ```
 
 ## External Validation Project Layout
@@ -181,7 +181,7 @@ artifacts/                       # Output (code)
 ## Tests
 
 ```bash
-go test ./artifacts/internal/... -v
+go test ./parser/... ./validator/... ./generator/... -v
 ```
 
 48 tests: parser 14 + generator 6 + validator 28

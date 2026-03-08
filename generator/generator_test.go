@@ -7,13 +7,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/geul-org/ssac/artifacts/internal/parser"
-	"github.com/geul-org/ssac/artifacts/internal/validator"
+	"github.com/geul-org/ssac/parser"
+	"github.com/geul-org/ssac/validator"
 )
 
 func specsDir() string {
 	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "..", "..", "test", "fixtures", "backend-service")
+	return filepath.Join(filepath.Dir(file), "..", "testdata", "backend-service")
 }
 
 func TestGenerateCreateSession(t *testing.T) {
@@ -133,7 +133,7 @@ func TestGenerateDir(t *testing.T) {
 
 func TestGenerateModelInterfaces(t *testing.T) {
 	_, file, _, _ := runtime.Caller(0)
-	dummyRoot := filepath.Join(filepath.Dir(file), "..", "..", "..", "specs", "dummy-study")
+	dummyRoot := filepath.Join(filepath.Dir(file), "..", "specs", "dummy-study")
 
 	funcs, err := parser.ParseDir(filepath.Join(dummyRoot, "service"))
 	if err != nil {
@@ -145,7 +145,7 @@ func TestGenerateModelInterfaces(t *testing.T) {
 		t.Fatalf("심볼 테이블 로드 실패: %v", err)
 	}
 
-	outDir := filepath.Join(filepath.Dir(file), "..", "..", "..", "artifacts", "test", "model_iface_test")
+	outDir := filepath.Join(filepath.Dir(file), "..", "testdata", "model_iface_test")
 	os.MkdirAll(outDir, 0755)
 	defer os.RemoveAll(outDir)
 
@@ -201,7 +201,7 @@ func TestGenerateModelInterfaces(t *testing.T) {
 
 func TestGenerateTypedRequestParams(t *testing.T) {
 	_, file, _, _ := runtime.Caller(0)
-	dummyRoot := filepath.Join(filepath.Dir(file), "..", "..", "..", "specs", "dummy-study")
+	dummyRoot := filepath.Join(filepath.Dir(file), "..", "specs", "dummy-study")
 
 	st, err := validator.LoadSymbolTable(dummyRoot)
 	if err != nil {

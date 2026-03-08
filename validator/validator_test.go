@@ -6,17 +6,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/geul-org/ssac/artifacts/internal/parser"
+	"github.com/geul-org/ssac/parser"
 )
 
 func specsDir() string {
 	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "..", "..", "test", "fixtures", "backend-service")
+	return filepath.Join(filepath.Dir(file), "..", "testdata", "backend-service")
 }
 
 func dummyStudyRoot() string {
 	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "..", "..", "..", "specs", "dummy-study")
+	return filepath.Join(filepath.Dir(file), "..", "specs", "dummy-study")
 }
 
 func dummyStudyServiceDir() string {

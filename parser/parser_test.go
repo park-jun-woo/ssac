@@ -9,7 +9,7 @@ import (
 
 func specsDir() string {
 	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "..", "..", "test", "fixtures", "backend-service")
+	return filepath.Join(filepath.Dir(file), "..", "testdata", "backend-service")
 }
 
 func TestParseCreateSession(t *testing.T) {

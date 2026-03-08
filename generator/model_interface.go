@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/geul-org/ssac/artifacts/internal/parser"
-	"github.com/geul-org/ssac/artifacts/internal/validator"
+	"github.com/geul-org/ssac/parser"
+	"github.com/geul-org/ssac/validator"
 )
 
 // GenerateModelInterfaces는 심볼 테이블과 SSaC spec을 교차하여 Model interface를 생성한다.
