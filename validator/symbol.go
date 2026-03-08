@@ -40,7 +40,22 @@ type MethodInfo struct {
 
 // DDLTable은 DDL에서 파싱한 테이블 컬럼 정보다.
 type DDLTable struct {
-	Columns map[string]string // snake_case 컬럼명 → Go 타입
+	Columns     map[string]string // snake_case 컬럼명 → Go 타입
+	ForeignKeys []ForeignKey      // FK 관계 목록
+	Indexes     []Index           // 인덱스 목록
+}
+
+// ForeignKey는 외래 키 관계다.
+type ForeignKey struct {
+	Column    string // 이 테이블의 컬럼 (e.g. "user_id")
+	RefTable  string // 참조 테이블 (e.g. "users")
+	RefColumn string // 참조 컬럼 (e.g. "id")
+}
+
+// Index는 테이블 인덱스다.
+type Index struct {
+	Name    string   // 인덱스 이름 (e.g. "idx_reservations_room_time")
+	Columns []string // 인덱스 컬럼 목록
 }
 
 // OperationSymbol은 API 엔드포인트의 request/response 필드 목록이다.
@@ -399,7 +414,7 @@ func (st *SymbolTable) loadDDL(dir string) error {
 	return nil
 }
 
-// parseDDLTables는 CREATE TABLE 문에서 컬럼명과 타입을 추출한다.
+// parseDDLTables는 CREATE TABLE 문에서 컬럼명, 타입, FK, 인덱스를 추출한다.
 func parseDDLTables(content string, tables map[string]DDLTable) {
 	lines := strings.Split(content, "\n")
 	var currentTable string
@@ -407,6 +422,12 @@ func parseDDLTables(content string, tables map[string]DDLTable) {
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		upper := strings.ToUpper(line)
+
+		// CREATE INDEX idx_name ON tablename (col1, col2);
+		if strings.HasPrefix(upper, "CREATE INDEX") || strings.HasPrefix(upper, "CREATE UNIQUE INDEX") {
+			parseCreateIndex(line, tables)
+			continue
+		}
 
 		// CREATE TABLE tablename (
 		if strings.HasPrefix(upper, "CREATE TABLE") {
@@ -432,13 +453,24 @@ func parseDDLTables(content string, tables map[string]DDLTable) {
 			continue
 		}
 
-		// 컬럼 라인: column_name TYPE ...
+		// 독립 FOREIGN KEY: CONSTRAINT fk_name FOREIGN KEY (col) REFERENCES table(col)
+		if strings.HasPrefix(upper, "CONSTRAINT") || strings.HasPrefix(upper, "FOREIGN") {
+			if fk, ok := parseConstraintFK(line); ok {
+				if t, exists := tables[currentTable]; exists {
+					t.ForeignKeys = append(t.ForeignKeys, fk)
+					tables[currentTable] = t
+				}
+			}
+			continue
+		}
+
+		// PRIMARY, UNIQUE, CHECK → skip
 		if strings.HasPrefix(upper, "PRIMARY") || strings.HasPrefix(upper, "UNIQUE") ||
-			strings.HasPrefix(upper, "FOREIGN") || strings.HasPrefix(upper, "CONSTRAINT") ||
 			strings.HasPrefix(upper, "CHECK") || line == "" {
 			continue
 		}
 
+		// 컬럼 라인: column_name TYPE ...
 		parts := strings.Fields(line)
 		if len(parts) < 2 {
 			continue
@@ -446,14 +478,131 @@ func parseDDLTables(content string, tables map[string]DDLTable) {
 
 		colName := parts[0]
 		colType := strings.ToUpper(parts[1])
-		// 쉼표 제거
 		colType = strings.TrimSuffix(colType, ",")
 
 		goType := pgTypeToGo(colType)
 		if t, ok := tables[currentTable]; ok {
 			t.Columns[colName] = goType
+
+			// 인라인 FK: column_name TYPE ... REFERENCES table(col)
+			if fk, ok := parseInlineFK(colName, parts); ok {
+				t.ForeignKeys = append(t.ForeignKeys, fk)
+			}
+			tables[currentTable] = t
 		}
 	}
+}
+
+// parseInlineFK는 컬럼 정의에서 인라인 REFERENCES를 파싱한다.
+// e.g. "user_id BIGINT NOT NULL REFERENCES users(id)"
+func parseInlineFK(colName string, parts []string) (ForeignKey, bool) {
+	for i, p := range parts {
+		if strings.ToUpper(p) == "REFERENCES" && i+1 < len(parts) {
+			ref := parts[i+1]
+			ref = strings.TrimSuffix(ref, ",")
+			refTable, refCol := parseRef(ref)
+			if refTable != "" {
+				return ForeignKey{Column: colName, RefTable: refTable, RefColumn: refCol}, true
+			}
+		}
+	}
+	return ForeignKey{}, false
+}
+
+// parseConstraintFK는 독립 FOREIGN KEY 절을 파싱한다.
+// e.g. "CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id)"
+// e.g. "FOREIGN KEY (user_id) REFERENCES users(id)"
+func parseConstraintFK(line string) (ForeignKey, bool) {
+	upper := strings.ToUpper(line)
+	fkIdx := strings.Index(upper, "FOREIGN KEY")
+	refIdx := strings.Index(upper, "REFERENCES")
+	if fkIdx < 0 || refIdx < 0 {
+		return ForeignKey{}, false
+	}
+
+	// FOREIGN KEY (col) 부분에서 컬럼 추출
+	between := line[fkIdx+len("FOREIGN KEY") : refIdx]
+	col := extractParenContent(between)
+	if col == "" {
+		return ForeignKey{}, false
+	}
+
+	// REFERENCES table(col) 부분
+	after := strings.TrimSpace(line[refIdx+len("REFERENCES"):])
+	after = strings.TrimSuffix(after, ",")
+	refTable, refCol := parseRef(after)
+	if refTable == "" {
+		return ForeignKey{}, false
+	}
+
+	return ForeignKey{Column: col, RefTable: refTable, RefColumn: refCol}, true
+}
+
+// parseCreateIndex는 CREATE INDEX 문을 파싱한다.
+// e.g. "CREATE INDEX idx_name ON tablename (col1, col2);"
+func parseCreateIndex(line string, tables map[string]DDLTable) {
+	upper := strings.ToUpper(line)
+	onIdx := strings.Index(upper, " ON ")
+	if onIdx < 0 {
+		return
+	}
+
+	// 인덱스 이름: CREATE [UNIQUE] INDEX idx_name ON ...
+	parts := strings.Fields(line[:onIdx])
+	idxName := ""
+	for i, p := range parts {
+		if strings.ToUpper(p) == "INDEX" && i+1 < len(parts) {
+			idxName = parts[i+1]
+			break
+		}
+	}
+
+	// ON tablename (col1, col2)
+	after := strings.TrimSpace(line[onIdx+4:])
+	afterParts := strings.SplitN(after, "(", 2)
+	if len(afterParts) < 2 {
+		return
+	}
+
+	tableName := strings.TrimSpace(afterParts[0])
+	colsPart := strings.TrimSuffix(strings.TrimSpace(afterParts[1]), ");")
+	colsPart = strings.TrimSuffix(colsPart, ")")
+
+	var cols []string
+	for _, c := range strings.Split(colsPart, ",") {
+		c = strings.TrimSpace(c)
+		if c != "" {
+			cols = append(cols, c)
+		}
+	}
+
+	if t, ok := tables[tableName]; ok && len(cols) > 0 {
+		t.Indexes = append(t.Indexes, Index{Name: idxName, Columns: cols})
+		tables[tableName] = t
+	}
+}
+
+// parseRef는 "users(id)" → ("users", "id") を파싱한다.
+func parseRef(s string) (table, col string) {
+	s = strings.TrimSpace(s)
+	parenIdx := strings.Index(s, "(")
+	if parenIdx < 0 {
+		return s, ""
+	}
+	table = s[:parenIdx]
+	col = strings.TrimSuffix(s[parenIdx+1:], ")")
+	col = strings.TrimSuffix(col, ",")
+	return table, col
+}
+
+// extractParenContent는 "(content)" 에서 content를 추출한다.
+func extractParenContent(s string) string {
+	open := strings.Index(s, "(")
+	close := strings.Index(s, ")")
+	if open < 0 || close < 0 || close <= open {
+		return ""
+	}
+	return strings.TrimSpace(s[open+1 : close])
 }
 
 // pgTypeToGo는 PostgreSQL 타입을 Go 타입으로 매핑한다.

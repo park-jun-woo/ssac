@@ -382,6 +382,44 @@ func TestLoadSymbolTable(t *testing.T) {
 	if !st.Funcs["calculateRefund"] {
 		t.Error("func calculateRefund 없음")
 	}
+
+	// DDL FK: reservations 테이블의 인라인 FK
+	resTable := st.DDLTables["reservations"]
+	if len(resTable.ForeignKeys) < 2 {
+		t.Fatalf("reservations FK 2개 이상이어야 함, got %d", len(resTable.ForeignKeys))
+	}
+	fkFound := map[string]bool{}
+	for _, fk := range resTable.ForeignKeys {
+		fkFound[fk.Column+"→"+fk.RefTable+"."+fk.RefColumn] = true
+	}
+	for _, want := range []string{"user_id→users.id", "room_id→rooms.id"} {
+		if !fkFound[want] {
+			t.Errorf("reservations FK %q 없음, got %v", want, resTable.ForeignKeys)
+		}
+	}
+
+	// DDL Index: reservations 테이블의 인덱스
+	if len(resTable.Indexes) < 2 {
+		t.Fatalf("reservations Index 2개 이상이어야 함, got %d", len(resTable.Indexes))
+	}
+	idxFound := map[string]bool{}
+	for _, idx := range resTable.Indexes {
+		idxFound[idx.Name] = true
+	}
+	for _, want := range []string{"idx_reservations_room_time", "idx_reservations_user"} {
+		if !idxFound[want] {
+			t.Errorf("reservations Index %q 없음", want)
+		}
+	}
+
+	// 인덱스 컬럼 검증
+	for _, idx := range resTable.Indexes {
+		if idx.Name == "idx_reservations_room_time" {
+			if len(idx.Columns) != 3 || idx.Columns[0] != "room_id" || idx.Columns[1] != "start_at" || idx.Columns[2] != "end_at" {
+				t.Errorf("idx_reservations_room_time 컬럼 기대 [room_id start_at end_at], got %v", idx.Columns)
+			}
+		}
+	}
 }
 
 // --- 외부 검증 정상 케이스: dummy-study 전체 통과 ---
