@@ -38,7 +38,23 @@ func (g *GoTarget) GenerateFunc(sf parser.ServiceFunc, st *validator.SymbolTable
 
 	// request 파라미터 타입 결정 (path param은 제외)
 	typedParams := collectTypedRequestParams(sf.Sequences, st, pathParamSet)
-	imports := collectImports(sf.Sequences, typedParams, sf.Imports)
+	hasNonStringPathParam := false
+	for _, pp := range pathParams {
+		if pp.GoType != "string" {
+			hasNonStringPathParam = true
+			break
+		}
+	}
+	needsQueryOpts := false
+	if st != nil && hasAnyQueryOpts(st) {
+		for _, seq := range sf.Sequences {
+			if seq.Type == parser.SeqGet && isListMethod(seq.Model) {
+				needsQueryOpts = true
+				break
+			}
+		}
+	}
+	imports := collectImports(sf.Sequences, typedParams, sf.Imports, hasNonStringPathParam, needsQueryOpts)
 
 	// package
 	pkgName := "service"
@@ -56,17 +72,26 @@ func (g *GoTarget) GenerateFunc(sf parser.ServiceFunc, st *validator.SymbolTable
 		buf.WriteString(")\n\n")
 	}
 
-	// func signature
-	sig := "func %s(w http.ResponseWriter, r *http.Request"
-	if len(pathParams) > 0 {
-		var ppArgs []string
-		for _, pp := range pathParams {
-			ppArgs = append(ppArgs, fmt.Sprintf("%s %s", lcFirst(pp.Name), pp.GoType))
-		}
-		sig += ", " + strings.Join(ppArgs, ", ")
+	// func signature (gin)
+	fmt.Fprintf(&buf, "func %s(c *gin.Context) {\n", sf.Name)
+
+	// path parameter extraction (c.Param + type conversion)
+	for _, pp := range pathParams {
+		buf.WriteString(generatePathParamCode(pp))
 	}
-	sig += ") {\n"
-	fmt.Fprintf(&buf, sig, sf.Name)
+	if len(pathParams) > 0 {
+		buf.WriteString("\n")
+	}
+
+	// currentUser extraction (authorize 또는 @param currentUser 사용 시)
+	if needsCurrentUser(sf.Sequences) {
+		var cuBuf bytes.Buffer
+		if err := goTemplates.ExecuteTemplate(&cuBuf, "currentUser", nil); err != nil {
+			return nil, fmt.Errorf("currentUser 템플릿 실행 실패: %w", err)
+		}
+		buf.Write(cuBuf.Bytes())
+		buf.WriteString("\n")
+	}
 
 	// request 파라미터 추출 (타입 변환 포함, path param 제외)
 	for _, tp := range typedParams {
@@ -85,17 +110,9 @@ func (g *GoTarget) GenerateFunc(sf parser.ServiceFunc, st *validator.SymbolTable
 	}
 
 	// QueryOpts 구성 코드 생성: List 메서드가 있고 QueryOpts가 존재할 때만
-	if st != nil && hasAnyQueryOpts(st) {
-		needsOpts := false
-		for _, seq := range sf.Sequences {
-			if seq.Type == parser.SeqGet && isListMethod(seq.Model) {
-				needsOpts = true
-				break
-			}
-		}
-		if needsOpts {
-			buf.WriteString("\topts := QueryOpts{}\n\n")
-		}
+	if needsQueryOpts {
+		buf.WriteString(generateQueryOptsCode(st))
+		buf.WriteString("\n")
 	}
 
 	// sequence 블록 생성
@@ -380,8 +397,8 @@ func buildJSONBodyParams(rawParams []struct {
 	buf.WriteString("\t}\n")
 
 	// decode
-	buf.WriteString("\tif err := json.NewDecoder(r.Body).Decode(&req); err != nil {\n")
-	buf.WriteString("\t\thttp.Error(w, \"invalid request body\", http.StatusBadRequest)\n")
+	buf.WriteString("\tif err := c.ShouldBindJSON(&req); err != nil {\n")
+	buf.WriteString("\t\tc.JSON(http.StatusBadRequest, gin.H{\"error\": \"invalid request body\"})\n")
 	buf.WriteString("\t\treturn\n")
 	buf.WriteString("\t}\n")
 
@@ -425,46 +442,44 @@ func lookupDDLType(paramName string, st *validator.SymbolTable) string {
 func generateExtractCode(varName, paramName, goType string) string {
 	switch goType {
 	case "int64":
-		return fmt.Sprintf("\t%s, err := strconv.ParseInt(r.FormValue(%q), 10, 64)\n"+
+		return fmt.Sprintf("\t%s, err := strconv.ParseInt(c.Query(%q), 10, 64)\n"+
 			"\tif err != nil {\n"+
-			"\t\thttp.Error(w, \"%s: 유효하지 않은 값\", http.StatusBadRequest)\n"+
+			"\t\tc.JSON(http.StatusBadRequest, gin.H{\"error\": \"%s: 유효하지 않은 값\"})\n"+
 			"\t\treturn\n"+
 			"\t}\n", varName, paramName, paramName)
 	case "float64":
-		return fmt.Sprintf("\t%s, err := strconv.ParseFloat(r.FormValue(%q), 64)\n"+
+		return fmt.Sprintf("\t%s, err := strconv.ParseFloat(c.Query(%q), 64)\n"+
 			"\tif err != nil {\n"+
-			"\t\thttp.Error(w, \"%s: 유효하지 않은 값\", http.StatusBadRequest)\n"+
+			"\t\tc.JSON(http.StatusBadRequest, gin.H{\"error\": \"%s: 유효하지 않은 값\"})\n"+
 			"\t\treturn\n"+
 			"\t}\n", varName, paramName, paramName)
 	case "bool":
-		return fmt.Sprintf("\t%s, err := strconv.ParseBool(r.FormValue(%q))\n"+
+		return fmt.Sprintf("\t%s, err := strconv.ParseBool(c.Query(%q))\n"+
 			"\tif err != nil {\n"+
-			"\t\thttp.Error(w, \"%s: 유효하지 않은 값\", http.StatusBadRequest)\n"+
+			"\t\tc.JSON(http.StatusBadRequest, gin.H{\"error\": \"%s: 유효하지 않은 값\"})\n"+
 			"\t\treturn\n"+
 			"\t}\n", varName, paramName, paramName)
 	case "time.Time":
-		return fmt.Sprintf("\t%s, err := time.Parse(time.RFC3339, r.FormValue(%q))\n"+
+		return fmt.Sprintf("\t%s, err := time.Parse(time.RFC3339, c.Query(%q))\n"+
 			"\tif err != nil {\n"+
-			"\t\thttp.Error(w, \"%s: 유효하지 않은 값\", http.StatusBadRequest)\n"+
+			"\t\tc.JSON(http.StatusBadRequest, gin.H{\"error\": \"%s: 유효하지 않은 값\"})\n"+
 			"\t\treturn\n"+
 			"\t}\n", varName, paramName, paramName)
 	default: // string
-		return fmt.Sprintf("\t%s := r.FormValue(%q)\n", varName, paramName)
+		return fmt.Sprintf("\t%s := c.Query(%q)\n", varName, paramName)
 	}
 }
 
 // collectImports는 사용된 패키지를 수집한다.
 // specImports는 spec 파일의 Go import 선언에서 가져온 경로다.
-func collectImports(seqs []parser.Sequence, typedParams []typedRequestParam, specImports []string) []string {
+func collectImports(seqs []parser.Sequence, typedParams []typedRequestParam, specImports []string, hasPathParams bool, hasQueryOpts bool) []string {
 	seen := map[string]bool{
-		"net/http": true, // 항상 사용
+		"net/http":                  true, // status code 상수
+		"github.com/gin-gonic/gin": true, // 항상 사용
 	}
 
 	for _, seq := range seqs {
-		switch {
-		case strings.HasPrefix(seq.Type, "response json"):
-			seen["encoding/json"] = true
-		case seq.Type == parser.SeqGuardState:
+		if seq.Type == parser.SeqGuardState {
 			seen["states/"+seq.Target+"state"] = true
 		}
 	}
@@ -475,23 +490,29 @@ func collectImports(seqs []parser.Sequence, typedParams []typedRequestParam, spe
 			seen["strconv"] = true
 		case "time.Time":
 			seen["time"] = true
-		case "json_body":
-			seen["encoding/json"] = true
 		}
 	}
 
+	// path param 타입 변환 또는 QueryOpts 파싱에 strconv 필요
+	if hasPathParams || hasQueryOpts {
+		seen["strconv"] = true
+	}
+
 	var imports []string
-	order := []string{"encoding/json", "net/http", "strconv", "time"}
+	order := []string{"net/http", "strconv", "time"}
 	for _, imp := range order {
 		if seen[imp] {
 			imports = append(imports, imp)
 			delete(seen, imp)
 		}
 	}
-	// 동적 import (states/*state 등)
+	// 동적 import (states/*state, gin 등)
+	var dynamic []string
 	for imp := range seen {
-		imports = append(imports, imp)
+		dynamic = append(dynamic, imp)
 	}
+	sort.Strings(dynamic)
+	imports = append(imports, dynamic...)
 	// spec 파일의 import (func 패키지 등)
 	for _, imp := range specImports {
 		imports = append(imports, imp)
@@ -568,6 +589,78 @@ func buildInputFields(params []parser.Param) string {
 		fields = append(fields, fieldName+": "+fieldValue)
 	}
 	return strings.Join(fields, ", ")
+}
+
+// generatePathParamCode는 gin의 c.Param() + 타입 변환 코드를 생성한다.
+func generatePathParamCode(pp validator.PathParam) string {
+	varName := lcFirst(pp.Name)
+	switch pp.GoType {
+	case "int64":
+		return fmt.Sprintf("\t%sStr := c.Param(%q)\n"+
+			"\t%s, err := strconv.ParseInt(%sStr, 10, 64)\n"+
+			"\tif err != nil {\n"+
+			"\t\tc.JSON(http.StatusBadRequest, gin.H{\"error\": \"invalid path parameter\"})\n"+
+			"\t\treturn\n"+
+			"\t}\n", varName, pp.Name, varName, varName)
+	case "float64":
+		return fmt.Sprintf("\t%sStr := c.Param(%q)\n"+
+			"\t%s, err := strconv.ParseFloat(%sStr, 64)\n"+
+			"\tif err != nil {\n"+
+			"\t\tc.JSON(http.StatusBadRequest, gin.H{\"error\": \"invalid path parameter\"})\n"+
+			"\t\treturn\n"+
+			"\t}\n", varName, pp.Name, varName, varName)
+	default: // string
+		return fmt.Sprintf("\t%s := c.Param(%q)\n", varName, pp.Name)
+	}
+}
+
+// needsCurrentUser는 authorize 시퀀스 또는 @param currentUser가 있는지 확인한다.
+func needsCurrentUser(seqs []parser.Sequence) bool {
+	for _, seq := range seqs {
+		if seq.Type == parser.SeqAuthorize {
+			return true
+		}
+		for _, p := range seq.Params {
+			if p.Source == "currentUser" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// generateQueryOptsCode는 gin의 c.Query()를 사용한 QueryOpts 파싱 코드를 생성한다.
+func generateQueryOptsCode(st *validator.SymbolTable) string {
+	var buf bytes.Buffer
+	buf.WriteString("\topts := QueryOpts{}\n")
+
+	// 심볼 테이블에서 어떤 query opts가 필요한지 확인
+	hasPagination := false
+	hasSort := false
+	for _, op := range st.Operations {
+		if op.XPagination != nil {
+			hasPagination = true
+		}
+		if op.XSort != nil {
+			hasSort = true
+		}
+	}
+
+	if hasPagination {
+		buf.WriteString("\tif v := c.Query(\"limit\"); v != \"\" {\n")
+		buf.WriteString("\t\topts.Limit, _ = strconv.Atoi(v)\n")
+		buf.WriteString("\t}\n")
+		buf.WriteString("\tif v := c.Query(\"offset\"); v != \"\" {\n")
+		buf.WriteString("\t\topts.Offset, _ = strconv.Atoi(v)\n")
+		buf.WriteString("\t}\n")
+	}
+	if hasSort {
+		buf.WriteString("\tif v := c.Query(\"sort\"); v != \"\" {\n")
+		buf.WriteString("\t\topts.SortCol = v\n")
+		buf.WriteString("\t}\n")
+	}
+
+	return buf.String()
 }
 
 func defaultMessage(seq parser.Sequence) string {

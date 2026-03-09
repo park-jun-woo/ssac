@@ -35,18 +35,18 @@ func TestGenerateCreateSession(t *testing.T) {
 		want  string
 	}{
 		{"package", "package service"},
-		{"import json", `"encoding/json"`},
+		{"import gin", `"github.com/gin-gonic/gin"`},
 		{"import http", `"net/http"`},
-		{"func sig", "func CreateSession(w http.ResponseWriter, r *http.Request)"},
-		{"request param", `projectID := r.FormValue("ProjectID")`},
-		{"request param", `command := r.FormValue("Command")`},
+		{"func sig", "func CreateSession(c *gin.Context)"},
+		{"request param", `projectID := c.Query("ProjectID")`},
+		{"request param", `command := c.Query("Command")`},
 		{"get model call", "projectModel.FindByID(projectID)"},
 		{"get result", "project, err :="},
 		{"guard nil", "if project == nil"},
 		{"guard nil message", `"프로젝트가 존재하지 않습니다"`},
 		{"post model call", "sessionModel.Create(projectID, command)"},
 		{"post result", "session, err :="},
-		{"response json", "json.NewEncoder(w).Encode"},
+		{"response json", "c.JSON(http.StatusOK, gin.H{"},
 		{"response var", `"session": session`},
 	}
 
@@ -54,6 +54,11 @@ func TestGenerateCreateSession(t *testing.T) {
 		if !strings.Contains(got, c.want) {
 			t.Errorf("[%s] %q 없음\n--- got ---\n%s", c.label, c.want, got)
 		}
+	}
+
+	// encoding/json은 사용되지 않아야 함
+	if strings.Contains(got, `"encoding/json"`) {
+		t.Errorf("encoding/json이 포함되면 안 됨\n--- got ---\n%s", got)
 	}
 }
 
@@ -74,6 +79,8 @@ func TestGenerateDeleteProject(t *testing.T) {
 		label string
 		want  string
 	}{
+		{"func sig", "func DeleteProject(c *gin.Context)"},
+		{"currentUser extraction", `c.MustGet("currentUser")`},
 		{"authorize check", `authz.Check(currentUser, "delete", "project", projectID)`},
 		{"authorize err", "allowed, err :="},
 		{"authorize forbidden", "if !allowed"},
@@ -85,6 +92,7 @@ func TestGenerateDeleteProject(t *testing.T) {
 		{"call component", "notification"},
 		{"call func", "cleanup.ProjectResources(cleanup.ProjectResourcesRequest{"},
 		{"delete", "projectModel.Delete(projectID)"},
+		{"error response gin", "c.JSON(http.StatusInternalServerError, gin.H{"},
 	}
 
 	for _, c := range checks {
@@ -225,9 +233,13 @@ func TestGenerateQueryOptsAndTotal(t *testing.T) {
 		want  string
 	}{
 		{"QueryOpts construction", "opts := QueryOpts{}"},
+		{"query limit parsing", `c.Query("limit")`},
+		{"query offset parsing", `c.Query("offset")`},
 		{"opts arg", "reservationModel.ListByUserID(currentUser.UserID, opts)"},
 		{"3-tuple return", "reservations, total, err :="},
 		{"total in response", `"total":        total`},
+		{"strconv import", `"strconv"`},
+		{"currentUser extraction", `c.MustGet("currentUser")`},
 	}
 
 	for _, c := range checks {
@@ -249,9 +261,6 @@ func TestGenerateQueryOptsAndTotal(t *testing.T) {
 
 	if strings.Contains(got2, "QueryOpts") {
 		t.Errorf("FindByID에 QueryOpts가 포함되면 안 됨\n--- got ---\n%s", got2)
-	}
-	if strings.Contains(got2, "opts") {
-		t.Errorf("FindByID에 opts가 포함되면 안 됨\n--- got ---\n%s", got2)
 	}
 }
 
@@ -281,12 +290,11 @@ func TestGenerateTypedRequestParams(t *testing.T) {
 		label string
 		want  string
 	}{
-		{"json import", `"encoding/json"`},
 		{"time import", `"time"`},
 		{"json body struct", "var req struct"},
 		{"StartAt field", "`json:\"StartAt\"`"},
 		{"EndAt field", "`json:\"EndAt\"`"},
-		{"json decode", "json.NewDecoder(r.Body).Decode(&req)"},
+		{"gin bind json", "c.ShouldBindJSON(&req)"},
 		{"startAt var", "startAt := req.StartAt"},
 		{"roomID var", "roomID := req.RoomID"},
 	}
@@ -296,9 +304,9 @@ func TestGenerateTypedRequestParams(t *testing.T) {
 		}
 	}
 
-	// FormValue는 사용되지 않아야 함 (JSON body 모드)
+	// r.FormValue는 사용되지 않아야 함
 	if strings.Contains(got, "r.FormValue") {
-		t.Errorf("JSON body 모드에서 r.FormValue가 사용되면 안 됨\n--- got ---\n%s", got)
+		t.Errorf("gin 모드에서 r.FormValue가 사용되면 안 됨\n--- got ---\n%s", got)
 	}
 
 	// update_room.go: RoomID는 path param, Name/Capacity/Location은 JSON body
@@ -317,11 +325,12 @@ func TestGenerateTypedRequestParams(t *testing.T) {
 		label string
 		want  string
 	}{
-		{"json import", `"encoding/json"`},
-		{"RoomID path param", "func UpdateRoom(w http.ResponseWriter, r *http.Request, roomID int64)"},
+		{"func sig gin", "func UpdateRoom(c *gin.Context)"},
+		{"path param extraction", `c.Param("RoomID")`},
+		{"path param parse", "strconv.ParseInt(roomIDStr, 10, 64)"},
 		{"json body struct", "var req struct"},
 		{"Capacity field", "Capacity int64"},
-		{"json decode", "json.NewDecoder(r.Body).Decode(&req)"},
+		{"gin bind json", "c.ShouldBindJSON(&req)"},
 		{"capacity var", "capacity := req.Capacity"},
 	}
 	for _, c := range checks2 {
@@ -330,9 +339,9 @@ func TestGenerateTypedRequestParams(t *testing.T) {
 		}
 	}
 
-	// RoomID는 path param이므로 FormValue/JSON body에 없어야 함
-	if strings.Contains(got2, `r.FormValue("RoomID")`) {
-		t.Errorf("RoomID는 path param이므로 FormValue가 없어야 함\n--- got ---\n%s", got2)
+	// RoomID는 path param이므로 c.Query/JSON body에 없어야 함
+	if strings.Contains(got2, `c.Query("RoomID")`) {
+		t.Errorf("RoomID는 path param이므로 c.Query가 없어야 함\n--- got ---\n%s", got2)
 	}
 }
 
@@ -361,14 +370,16 @@ func TestGeneratePathParamSignature(t *testing.T) {
 		label string
 		want  string
 	}{
-		{"path param sig", "func GetReservation(w http.ResponseWriter, r *http.Request, reservationID int64)"},
+		{"gin sig", "func GetReservation(c *gin.Context)"},
+		{"path param extraction", `c.Param("ReservationID")`},
+		{"path param parse", "strconv.ParseInt(reservationIDStr, 10, 64)"},
 	}
 
 	negChecks := []struct {
 		label  string
 		reject string
 	}{
-		{"no FormValue for path param", `r.FormValue("ReservationID")`},
+		{"no query for path param", `c.Query("ReservationID")`},
 	}
 
 	for _, c := range checks {
@@ -382,7 +393,7 @@ func TestGeneratePathParamSignature(t *testing.T) {
 		}
 	}
 
-	// login.go: path param 없으므로 기존 시그니처 유지
+	// login.go: path param 없으므로 gin 시그니처 유지
 	sf2, err := parser.ParseFile(filepath.Join(dummyRoot, "service", "login.go"))
 	if err != nil {
 		t.Fatalf("파싱 실패: %v", err)
@@ -394,8 +405,8 @@ func TestGeneratePathParamSignature(t *testing.T) {
 	}
 	got2 := string(code2)
 
-	if !strings.Contains(got2, "func Login(w http.ResponseWriter, r *http.Request)") {
-		t.Errorf("Login 시그니처에 path param이 없어야 함\n--- got ---\n%s", got2)
+	if !strings.Contains(got2, "func Login(c *gin.Context)") {
+		t.Errorf("Login gin 시그니처 없음\n--- got ---\n%s", got2)
 	}
 }
 
@@ -426,6 +437,10 @@ func TestGenerateCustomMessages(t *testing.T) {
 	// 내부 에러는 항상 고정
 	if !strings.Contains(got, "권한 확인 실패") {
 		t.Errorf("authorize 내부 에러 메시지 없음\n%s", got)
+	}
+	// currentUser extraction
+	if !strings.Contains(got, `c.MustGet("currentUser")`) {
+		t.Errorf("currentUser 추출 없음\n%s", got)
 	}
 
 	// call @func with custom @message (guard형: @result 없음)
@@ -530,6 +545,7 @@ func TestGenerateGuardState(t *testing.T) {
 		{"CanTransition call", `coursestate.CanTransition(course.Published, "PublishCourse")`},
 		{"guard state import", `"states/coursestate"`},
 		{"conflict status", "http.StatusConflict"},
+		{"gin error response", "c.JSON(http.StatusConflict, gin.H{"},
 	}
 
 	for _, c := range checks {

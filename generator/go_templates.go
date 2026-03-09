@@ -3,15 +3,20 @@ package generator
 import "text/template"
 
 var goTemplates = template.Must(template.New("").Parse(`
+{{- define "currentUser" -}}
+	// currentUser
+	currentUser := c.MustGet("currentUser").(*model.CurrentUser)
+{{end}}
+
 {{- define "authorize" -}}
 	// authorize
 	allowed, err := authz.Check(currentUser, "{{.Action}}", "{{.Resource}}", {{.ID}})
 	if err != nil {
-		http.Error(w, "권한 확인 실패", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "권한 확인 실패"})
 		return
 	}
 	if !allowed {
-		http.Error(w, "{{.Message}}", http.StatusForbidden)
+		c.JSON(http.StatusForbidden, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
@@ -20,7 +25,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 	// get
 	{{.Result.Var}}, {{if .HasTotal}}total, {{end}}err := {{.ModelVar}}.{{.ModelMethod}}({{.ParamArgs}})
 	if err != nil {
-		http.Error(w, "{{.Message}}", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
@@ -28,7 +33,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{- define "guard nil" -}}
 	// guard nil
 	if {{.Target}} {{.ZeroCheck}} {
-		http.Error(w, "{{.Message}}", http.StatusNotFound)
+		c.JSON(http.StatusNotFound, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
@@ -36,7 +41,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{- define "guard exists" -}}
 	// guard exists
 	if {{.Target}} {{.ExistsCheck}} {
-		http.Error(w, "{{.Message}}", http.StatusConflict)
+		c.JSON(http.StatusConflict, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
@@ -44,7 +49,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{- define "guard state" -}}
 	// guard state
 	if !{{.Target}}state.CanTransition({{.Entity}}.{{.StatusField}}, "{{.FuncName}}") {
-		http.Error(w, "{{.Message}}", http.StatusConflict)
+		c.JSON(http.StatusConflict, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
@@ -53,7 +58,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 	// post
 	{{.Result.Var}}, err := {{.ModelVar}}.{{.ModelMethod}}({{.ParamArgs}})
 	if err != nil {
-		http.Error(w, "{{.Message}}", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
@@ -62,7 +67,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 	// put
 	err {{if .FirstErr}}:={{else}}={{end}} {{.ModelVar}}.{{.ModelMethod}}({{.ParamArgs}})
 	if err != nil {
-		http.Error(w, "{{.Message}}", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
@@ -71,7 +76,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 	// delete
 	err {{if .FirstErr}}:={{else}}={{end}} {{.ModelVar}}.{{.ModelMethod}}({{.ParamArgs}})
 	if err != nil {
-		http.Error(w, "{{.Message}}", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
@@ -80,7 +85,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 	// call component
 	{{if .Result}}{{.Result.Var}}, {{end}}err {{if .FirstErr}}:={{else}}={{end}} {{.Component}}.{{.ComponentMethod}}({{.ParamArgs}})
 	if err != nil {
-		http.Error(w, "{{.Message}}", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
@@ -89,7 +94,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 	// call func
 	{{if .Result}}out{{else}}_{{end}}, err {{if .FirstErr}}:={{else}}={{end}} {{.PkgName}}.{{.FuncMethod}}({{.PkgName}}.{{.FuncMethod}}Request{ {{.InputFields}} })
 	if err != nil {
-		http.Error(w, "{{.Message}}", {{.FuncErrStatus}})
+		c.JSON({{.FuncErrStatus}}, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{- if .Result}}
@@ -99,8 +104,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 
 {{- define "response json" -}}
 	// response json
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	c.JSON(http.StatusOK, gin.H{
 		{{- range .Vars}}
 		"{{.}}": {{.}},
 		{{- end}}
