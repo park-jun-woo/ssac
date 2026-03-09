@@ -41,6 +41,14 @@ var goTemplates = template.Must(template.New("").Parse(`
 	}
 {{end}}
 
+{{- define "guard state" -}}
+	// guard state
+	if !{{.Target}}state.CanTransition({{.Entity}}.{{.StatusField}}, "{{.FuncName}}") {
+		http.Error(w, "{{.Message}}", http.StatusConflict)
+		return
+	}
+{{end}}
+
 {{- define "post" -}}
 	// post
 	{{.Result.Var}}, err := {{.ModelVar}}.{{.ModelMethod}}({{.ParamArgs}})

@@ -161,6 +161,16 @@ func validateRequiredFields(sf parser.ServiceFunc) []ValidationError {
 				errs = append(errs, ctx.err("@sequence", "guard 대상 변수 누락"))
 			}
 
+		case parser.SeqGuardState:
+			if seq.Target == "" {
+				errs = append(errs, ctx.err("@sequence", "guard state 대상 누락"))
+			}
+			if len(seq.Params) != 1 {
+				errs = append(errs, ctx.err("@param", fmt.Sprintf("guard state는 @param 1개 필요, %d개 있음", len(seq.Params))))
+			} else if !strings.Contains(seq.Params[0].Name, ".") {
+				errs = append(errs, ctx.err("@param", "entity.Field 형식이어야 함"))
+			}
+
 		case parser.SeqPassword:
 			if len(seq.Params) < 2 {
 				errs = append(errs, ctx.err("@param", fmt.Sprintf("password는 2개 필요, %d개 있음", len(seq.Params))))
@@ -206,8 +216,8 @@ func validateVariableFlow(sf parser.ServiceFunc) []ValidationError {
 	for i, seq := range sf.Sequences {
 		ctx := errCtx{sf.FileName, sf.Name, i}
 
-		// guard: Target 참조 검증
-		if seq.Target != "" && !declared[seq.Target] {
+		// guard: Target 참조 검증 (guard state의 Target은 stateDiagramID이므로 제외)
+		if seq.Target != "" && seq.Type != parser.SeqGuardState && !declared[seq.Target] {
 			errs = append(errs, ctx.err("guard", fmt.Sprintf("%q 변수가 아직 선언되지 않았습니다", seq.Target)))
 		}
 

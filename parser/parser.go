@@ -97,8 +97,8 @@ func parseCommentList(comments []*ast.Comment) []Sequence {
 			}
 			seqType := parseSequenceType(value)
 			current = &Sequence{Type: seqType}
-			// guard nil/exists: 3번째 단어가 대상 변수
-			if (seqType == SeqGuardNil || seqType == SeqGuardExists) {
+			// guard nil/exists/state: 3번째 단어가 대상 변수 또는 stateDiagramID
+			if seqType == SeqGuardNil || seqType == SeqGuardExists || seqType == SeqGuardState {
 				current.Target = parseGuardTarget(value)
 			}
 			continue

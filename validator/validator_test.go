@@ -743,3 +743,78 @@ func TestDDLColumnOrder(t *testing.T) {
 		t.Errorf("ColumnOrder 길이(%d) != Columns 크기(%d)", len(table.ColumnOrder), len(table.Columns))
 	}
 }
+
+func TestValidateGuardState(t *testing.T) {
+	// 정상: guard state course + @param course.Published
+	sf := parser.ServiceFunc{
+		Name:     "PublishCourse",
+		FileName: "publish_course.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Course.FindByID", Result: &parser.Result{Var: "course", Type: "Course"}},
+			{Type: parser.SeqGuardState, Target: "course", Params: []parser.Param{{Name: "course.Published"}}},
+		},
+	}
+	errs := Validate([]parser.ServiceFunc{sf})
+	for _, e := range errs {
+		if e.Level != "WARNING" {
+			t.Errorf("정상 guard state에서 에러: %s", e)
+		}
+	}
+
+	// 에러: @param 없음
+	sf2 := parser.ServiceFunc{
+		Name:     "PublishCourse",
+		FileName: "publish_course.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGuardState, Target: "course"},
+		},
+	}
+	errs2 := Validate([]parser.ServiceFunc{sf2})
+	found := false
+	for _, e := range errs2 {
+		if strings.Contains(e.Message, "@param 1개 필요") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("@param 없는 guard state에서 에러 미발생")
+	}
+
+	// 에러: @param에 dot 없음
+	sf3 := parser.ServiceFunc{
+		Name:     "PublishCourse",
+		FileName: "publish_course.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGuardState, Target: "course", Params: []parser.Param{{Name: "status"}}},
+		},
+	}
+	errs3 := Validate([]parser.ServiceFunc{sf3})
+	found = false
+	for _, e := range errs3 {
+		if strings.Contains(e.Message, "entity.Field") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("dot 없는 @param에서 에러 미발생")
+	}
+
+	// 에러: @param의 entity가 미선언 변수
+	sf4 := parser.ServiceFunc{
+		Name:     "PublishCourse",
+		FileName: "publish_course.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGuardState, Target: "course", Params: []parser.Param{{Name: "unknown.Published"}}},
+		},
+	}
+	errs4 := Validate([]parser.ServiceFunc{sf4})
+	found = false
+	for _, e := range errs4 {
+		if strings.Contains(e.Message, "선언되지 않았습니다") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("미선언 entity에서 에러 미발생")
+	}
+}

@@ -50,6 +50,7 @@ const (
 	SeqDelete      = "delete"
 	SeqPassword    = "password"
 	SeqCall        = "call"
+	SeqGuardState  = "guard state"
 	SeqResponse    = "response"
 )
 
@@ -63,5 +64,6 @@ var ValidSequenceTypes = map[string]bool{
 	SeqDelete:      true,
 	SeqPassword:    true,
 	SeqCall:        true,
+	SeqGuardState:  true,
 	SeqResponse:    true,
 }

@@ -452,6 +452,58 @@ func GetProjectDetail(w http.ResponseWriter, r *http.Request) {}
 	assertStrSlice(t, "response.Vars", s.Vars, []string{"project", "sessions"})
 }
 
+// --- guard state 파싱 ---
+
+func TestParseGuardState(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "publish_course.go")
+	content := `package service
+
+import "net/http"
+
+// @sequence get
+// @model Course.FindByID
+// @param CourseID request
+// @result course Course
+
+// @sequence guard nil course
+
+// @sequence guard state course
+// @param course.Published
+
+// @sequence put
+// @model Course.Publish
+// @param CourseID request
+
+// @sequence response json
+func PublishCourse(w http.ResponseWriter, r *http.Request) {}
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	sf, err := ParseFile(path)
+	if err != nil {
+		t.Fatalf("파싱 실패: %v", err)
+	}
+	if sf == nil {
+		t.Fatal("ServiceFunc가 nil")
+	}
+
+	if len(sf.Sequences) != 5 {
+		t.Fatalf("sequence 수: got %d, want 5", len(sf.Sequences))
+	}
+
+	// sequence 2: guard state
+	s := sf.Sequences[2]
+	assertStr(t, "guard state.Type", s.Type, "guard state")
+	assertStr(t, "guard state.Target", s.Target, "course")
+	if len(s.Params) != 1 {
+		t.Fatalf("guard state params: got %d, want 1", len(s.Params))
+	}
+	assertStr(t, "guard state.Params[0].Name", s.Params[0].Name, "course.Published")
+}
+
 // --- 도메인 폴더 재귀 탐색 ---
 
 func TestParseDirRecursive(t *testing.T) {

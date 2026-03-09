@@ -399,6 +399,59 @@ func TestGeneratePathParamSignature(t *testing.T) {
 	}
 }
 
+func TestGenerateGuardState(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name:     "PublishCourse",
+		FileName: "publish_course.go",
+		Sequences: []parser.Sequence{
+			{
+				Type:   parser.SeqGet,
+				Model:  "Course.FindByID",
+				Params: []parser.Param{{Name: "CourseID", Source: "request"}},
+				Result: &parser.Result{Var: "course", Type: "Course"},
+			},
+			{
+				Type:   parser.SeqGuardNil,
+				Target: "course",
+			},
+			{
+				Type:   parser.SeqGuardState,
+				Target: "course",
+				Params: []parser.Param{{Name: "course.Published"}},
+			},
+			{
+				Type:   parser.SeqPut,
+				Model:  "Course.Publish",
+				Params: []parser.Param{{Name: "CourseID", Source: "request"}},
+			},
+			{
+				Type: "response json",
+			},
+		},
+	}
+
+	code, err := GenerateFunc(sf, nil)
+	if err != nil {
+		t.Fatalf("코드 생성 실패: %v", err)
+	}
+	got := string(code)
+
+	checks := []struct {
+		label string
+		want  string
+	}{
+		{"CanTransition call", `coursestate.CanTransition(course.Published, "PublishCourse")`},
+		{"guard state import", `"states/coursestate"`},
+		{"conflict status", "http.StatusConflict"},
+	}
+
+	for _, c := range checks {
+		if !strings.Contains(got, c.want) {
+			t.Errorf("[%s] %q 없음\n--- got ---\n%s", c.label, c.want, got)
+		}
+	}
+}
+
 func TestGenerateDomain(t *testing.T) {
 	_, file, _, _ := runtime.Caller(0)
 	domainDir := filepath.Join(filepath.Dir(file), "..", "testdata", "domain-service")

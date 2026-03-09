@@ -189,6 +189,10 @@ type templateData struct {
 	Vars []string
 	// list
 	HasTotal bool // many + QueryOpts → 3-tuple 반환
+	// guard state
+	Entity      string // @param의 entity 부분 (e.g. "course")
+	StatusField string // @param의 field 부분 (e.g. "Published")
+	FuncName    string // 현재 함수명 (e.g. "PublishCourse")
 }
 
 func buildTemplateData(seq parser.Sequence, errDeclared *bool, resultTypes map[string]string, st *validator.SymbolTable, funcName string) templateData {
@@ -228,6 +232,14 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, resultTypes map[s
 
 	// guard 대상 + 타입별 비교식
 	d.Target = seq.Target
+	if seq.Type == parser.SeqGuardState && len(seq.Params) > 0 {
+		parts := strings.SplitN(seq.Params[0].Name, ".", 2)
+		d.Entity = parts[0]
+		if len(parts) > 1 {
+			d.StatusField = parts[1]
+		}
+		d.FuncName = funcName
+	}
 	if seq.Type == parser.SeqGuardNil || seq.Type == parser.SeqGuardExists {
 		typeName := resultTypes[seq.Target]
 		d.ZeroCheck, d.ExistsCheck = zeroValueChecks(typeName)
@@ -439,6 +451,8 @@ func collectImports(seqs []parser.Sequence, typedParams []typedRequestParam) []s
 			seen["encoding/json"] = true
 		case seq.Type == parser.SeqPassword:
 			seen["golang.org/x/crypto/bcrypt"] = true
+		case seq.Type == parser.SeqGuardState:
+			seen["states/"+seq.Target+"state"] = true
 		}
 	}
 
@@ -458,7 +472,12 @@ func collectImports(seqs []parser.Sequence, typedParams []typedRequestParam) []s
 	for _, imp := range order {
 		if seen[imp] {
 			imports = append(imports, imp)
+			delete(seen, imp)
 		}
+	}
+	// 동적 import (states/*state 등)
+	for imp := range seen {
+		imports = append(imports, imp)
 	}
 	return imports
 }
@@ -517,6 +536,8 @@ func defaultMessage(seq parser.Sequence) string {
 		return seq.Target + "가 존재하지 않습니다"
 	case parser.SeqGuardExists:
 		return seq.Target + "가 이미 존재합니다"
+	case parser.SeqGuardState:
+		return "상태 전이가 허용되지 않습니다"
 	case parser.SeqAuthorize:
 		return "권한 확인 실패"
 	case parser.SeqPassword:
