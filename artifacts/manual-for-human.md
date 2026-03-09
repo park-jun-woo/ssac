@@ -367,12 +367,17 @@ x-filter:
 filters := parseFilters(r.URL.Query(), []string{"status", "room_id"})
 ```
 
-#### x-include — 관계 포함
+#### x-include — 정방향 FK include
 
 ```yaml
 x-include:
-  allowed: [room, user]            # 포함 가능 관계 리소스
+  allowed: [room_id:rooms.id, user_id:users.id]   # FK컬럼:참조테이블.참조컬럼
 ```
+
+문법 (단일 형식만 허용):
+- `room_id:rooms.id` — 정방향 FK 관계 (reservations.room_id → rooms.id)
+- 런타임 include 이름: FK 컬럼에서 `_id` 제거 (`room_id` → `room`)
+- 역방향 FK (1:N)는 지원하지 않음 — 별도 엔드포인트로 처리
 
 코드젠 결과:
 ```go
@@ -396,7 +401,7 @@ includes := parseIncludes(r.URL.Query().Get("include"), []string{"room", "user"}
     x-filter:
       allowed: [status, room_id]
     x-include:
-      allowed: [room, user]
+      allowed: [room_id:rooms.id, user_id:users.id]
 ```
 
 대응하는 SSaC — 비즈니스 파라미터(`UserID`)만 선언:
