@@ -34,35 +34,34 @@ No LLM, no inference — pure symbolic codegen from templates. The spec is the s
 
 // @sequence response json
 // @var session
-func CreateSession(w http.ResponseWriter, r *http.Request) {}
+func CreateSession(c *gin.Context) {}
 ```
 
-This 10-line declaration generates the following code:
+This 10-line declaration generates the following code (gin framework):
 
 ```go
-func CreateSession(w http.ResponseWriter, r *http.Request) {
-    projectID := r.FormValue("ProjectID")
-    command := r.FormValue("Command")
+func CreateSession(c *gin.Context) {
+    projectID := c.Query("ProjectID")
+    command := c.Query("Command")
 
     project, err := projectModel.FindByID(projectID)
     if err != nil {
-        http.Error(w, "Project lookup failed", http.StatusInternalServerError)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Project lookup failed"})
         return
     }
 
     if project == nil {
-        http.Error(w, "project not found", http.StatusNotFound)
+        c.JSON(http.StatusNotFound, gin.H{"error": "project not found"})
         return
     }
 
     session, err := sessionModel.Create(projectID, command)
     if err != nil {
-        http.Error(w, "Session creation failed", http.StatusInternalServerError)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Session creation failed"})
         return
     }
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    c.JSON(http.StatusOK, gin.H{
         "session": session,
     })
 }
@@ -80,7 +79,7 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 | `post` | Resource creation |
 | `put` | Resource update |
 | `delete` | Resource deletion |
-| `call` | External call (@component / @func package.funcName) |
+| `call` | External function call (@func package.funcName) |
 | `response` | Return response (json) |
 
 ## Install & Run
@@ -103,7 +102,7 @@ Internal validation (always):
 External SSOT cross-validation (when project structure detected):
 - Model/method existence (sqlc queries, Go interface)
 - Request/response field existence (OpenAPI)
-- Component existence (Go interface). `@func` with package skips cross-validation (external package)
+- `@func` target existence (Go func declarations in model/*.go)
 - Stale data warning: put/delete followed by response without re-fetch (WARNING level)
 
 ```bash
@@ -128,8 +127,12 @@ When external SSOT (symbol table) is available, `ssac gen` adds:
   - OpenAPI x-extensions → `opts QueryOpts` parameter added to model methods
 - **Domain folder structure**: `service/auth/login.go` → outputs to `outDir/auth/login.go` with `package auth`
   - Flat structure (`service/login.go`) backward compatible (Domain="")
-- **@func package codegen**: `@func auth.verifyPassword` → `auth.VerifyPassword(auth.VerifyPasswordInput{...})`
+- **@func codegen**: `@func auth.verifyPassword` → `auth.VerifyPassword(auth.VerifyPasswordRequest{...})`
   - `@result` absent → guard-style (401 Unauthorized), `@result` present → value-style (500 InternalServerError)
+  - `@result var Type.Field` → explicit field extraction (`out.Field`)
+  - `@param user.ID -> UserID` → Request struct field mapping
+- **Spec file imports**: Go import declarations in spec files are passed to generated code. `@func` package name is the alias of the imported package.
+- **`-> column` mapping**: Also used for @func Request struct field mapping: `@param user.ID -> UserID`
 
 ## OpenAPI x- Extensions
 
@@ -149,8 +152,8 @@ Infrastructure parameters (pagination, sorting, filtering, relation includes) ar
       direction: desc
     x-filter:                           # allowed filter columns
       allowed: [status, room_id]
-    x-include:                          # allowed relation resources
-      allowed: [room, user]
+    x-include:                          # FK_column:ref_table.ref_column
+      allowed: [room_id:rooms.id, user_id:users.id]
 ```
 
 Effects on codegen:
@@ -188,7 +191,7 @@ files/                           # Design documents
   db/*.sql                # DDL (CREATE TABLE → column types)
   db/queries/*.sql        # sqlc queries (-- name: Method :cardinality)
   api/openapi.yaml        # OpenAPI 3.0 (operationId = function name, x-pagination/sort/filter/include)
-  model/*.go              # Go interface (component), func
+  model/*.go              # Go interface → model methods, func → @func targets, // @dto → DTO
 ```
 
 ## Tests
@@ -197,7 +200,7 @@ files/                           # Design documents
 go test ./parser/... ./validator/... ./generator/... -v
 ```
 
-60 tests: parser 16 + generator 11 + validator 33
+59 tests: parser 16 + generator 11 + validator 32
 
 ## License
 

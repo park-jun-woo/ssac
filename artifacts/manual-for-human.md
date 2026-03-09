@@ -2,7 +2,7 @@
 
 ## 개요
 
-SSaC(Service Sequences as Code)는 Go 주석 기반 선언적 서비스 로직을 파싱하여 Go 구현 코드를 생성하는 CLI 도구다.
+SSaC(Service Sequences as Code)는 Go 주석 기반 선언적 서비스 로직을 파싱하여 Go+gin 구현 코드를 생성하는 CLI 도구다.
 
 ```
 specs/service/**/*.go  →  ssac parse  →  ssac validate  →  ssac gen  →  artifacts/service/**/*.go
@@ -61,7 +61,6 @@ ssac validate specs/dummy-study       # 외부 SSOT 교차 검증 (자동 감지
 | 외부 | 모델/메서드 존재 (sqlc queries, Go interface) |
 | 외부 | request 필드 존재 (OpenAPI) |
 | 외부 | response 필드 존재 (OpenAPI) |
-| 외부 | component/func 존재 (Go interface, Go func) |
 
 ### gen
 
@@ -89,6 +88,7 @@ func FuncName(w http.ResponseWriter, r *http.Request) {}
 - 하나의 `.go` 파일에 하나의 함수
 - 함수 위에 sequence 블록을 나열 (빈 줄로 구분 가능)
 - `@sequence`가 블록의 시작
+- spec 파일의 Go import 선언은 생성 코드에 전달됨 (`"net/http"` 제외)
 
 ### 도메인 폴더 구조
 
@@ -127,6 +127,12 @@ artifacts/service/
 // @message "커스텀 메시지"  // 선택: Forbidden 메시지 (기본: "권한이 없습니다"). 내부 에러는 "권한 확인 실패" 고정.
 ```
 
+코드젠 결과:
+```go
+currentUser := c.MustGet("currentUser").(*model.CurrentUser)
+allowed, err := authz.Check(currentUser, "create", "course", nil)
+```
+
 #### get — 리소스 조회
 
 ```go
@@ -161,7 +167,7 @@ artifacts/service/
 함수명이 전이 이벤트로 사용된다. 코드젠 결과:
 ```go
 if !coursestate.CanTransition(course.Published, "PublishCourse") {
-    http.Error(w, "상태 전이가 허용되지 않습니다", http.StatusConflict)
+    c.JSON(http.StatusConflict, gin.H{"error": "상태 전이가 허용되지 않습니다"})
     return
 }
 ```
@@ -193,41 +199,49 @@ import: `"states/{stateDiagramID}state"` (상태 머신 패키지는 fullend가 
 // @param <Name> <source>
 ```
 
-#### call — 외부 호출
+#### call — 외부 함수 호출
 
-component (등록된 컴포넌트):
 ```go
 // @sequence call
-// @component <name>        // 필수 (func과 택일)
-// @param <args>
-// @result <var> <Type>     // 선택
+// @func <package>.<funcName>   // 필수. e.g. auth.verifyPassword
+// @param <args> [-> FieldName] // -> 로 Request struct 필드명 명시 가능
+// @result <var> <Type[.Field]> // 선택: 없으면 guard형 (401), 있으면 value형 (500). Type.Field로 Response 필드 지정
+// @message "커스텀 메시지"       // 선택
 ```
 
-func (패키지 분리 함수):
+spec 파일에 import를 명시해야 한다:
 ```go
+package service
+
+import (
+    "net/http"
+    "github.com/geul-org/fullend/pkg/auth"
+)
+
 // @sequence call
-// @func <package>.<funcName>   // 필수 (component과 택일). e.g. auth.verifyPassword
-// @param <args>
-// @result <var> <Type>     // 선택: 없으면 guard형 (401), 있으면 value형 (500)
-// @message "커스텀 메시지"  // 선택
+// @func auth.verifyPassword
+// @param user.PasswordHash
+// @param Password request
+// @message "비밀번호가 일치하지 않습니다"
 ```
 
 코드젠 결과:
 ```go
 // guard형 (@result 없음)
-_, err = auth.VerifyPassword(auth.VerifyPasswordInput{PasswordHash: user.PasswordHash, Password: password})
+_, err = auth.VerifyPassword(auth.VerifyPasswordRequest{PasswordHash: user.PasswordHash, Password: password})
 if err != nil {
-    http.Error(w, "비밀번호가 일치하지 않습니다", http.StatusUnauthorized)
+    c.JSON(http.StatusUnauthorized, gin.H{"error": "비밀번호가 일치하지 않습니다"})
     return
 }
 
-// value형 (@result 있음)
-out, err := auth.HashPassword(auth.HashPasswordInput{Password: password})
+// value형 (@result 있음, Type.Field로 필드 지정)
+// @result token Token.AccessToken
+out, err := auth.IssueToken(auth.IssueTokenRequest{UserID: user.ID})
 if err != nil {
-    http.Error(w, "hashPassword 호출 실패", http.StatusInternalServerError)
+    c.JSON(http.StatusInternalServerError, gin.H{"error": "issueToken 호출 실패"})
     return
 }
-hashedPassword := out.HashedPassword
+token := out.AccessToken
 ```
 
 #### response — 응답 반환
@@ -241,22 +255,25 @@ hashedPassword := out.HashedPassword
 
 | source | 의미 | 코드젠 결과 |
 |---|---|---|
-| `request` | HTTP 요청 파라미터 | `r.FormValue("Name")` (DDL 타입에 따라 변환 코드 추가) |
-| `currentUser` | 인증 컨텍스트 (예약어) | `currentUser.Name` |
+| `request` | HTTP 요청 파라미터 | `c.Query("Name")` (DDL 타입에 따라 변환 코드 추가) |
+| `currentUser` | 인증 컨텍스트 (예약어) | `currentUser.Name` (자동으로 `c.MustGet` 추출) |
 | `config` | 환경 설정 (예약어) | `config.Name` |
 | (없음) | 변수 참조 | 변수 그대로 |
 | dot notation | 필드 참조 | `user.Email` 그대로 |
 | `"리터럴"` | 문자열 리터럴 | `"리터럴"` 그대로 |
 
-#### `-> column` 명시적 DDL 컬럼 매핑
+#### `-> column` 명시적 매핑
 
-기본적으로 `@param Name request`의 `Name`을 PascalCase → snake_case로 변환하여 DDL 컬럼과 매칭한다. 자동 변환이 맞지 않는 경우 `-> column`으로 명시적 매핑:
-
+DDL 컬럼 매핑:
 ```go
 // @param PaymentMethod request -> method
 ```
 
-`-> method`가 있으면 `PaymentMethod`를 DDL의 `method` 컬럼에 매핑한다. 없으면 기존 자동 변환(`payment_method`) 유지.
+@func Request struct 필드 매핑:
+```go
+// @param user.ID -> UserID
+// → auth.IssueTokenRequest{UserID: user.ID}
+```
 
 ### @message 기본값
 
@@ -272,8 +289,7 @@ hashedPassword := out.HashedPassword
 | guard exists (conflict) | "conflict가 이미 존재합니다" |
 | guard state | "상태 전이가 허용되지 않습니다" |
 | authorize | "권한이 없습니다" (Forbidden), "권한 확인 실패" (내부 에러, 고정) |
-| call @component notify | "notify 호출 실패" |
-| call @func auth.verify | "verifyPassword 호출 실패" |
+| call @func auth.verify | "verify 호출 실패" |
 
 ---
 
@@ -364,10 +380,13 @@ x-pagination:
 
 코드젠 결과:
 ```go
-// offset style
-limit := clampLimit(r.URL.Query().Get("limit"), 20, 100)
-offset := parseOffset(r.URL.Query().Get("offset"))
-items, total, err := model.List(userID, QueryOpts{Limit: limit, Offset: offset})
+opts := QueryOpts{}
+if v := c.Query("limit"); v != "" {
+    opts.Limit, _ = strconv.Atoi(v)
+}
+if v := c.Query("offset"); v != "" {
+    opts.Offset, _ = strconv.Atoi(v)
+}
 ```
 
 #### x-sort — 정렬
@@ -381,8 +400,9 @@ x-sort:
 
 코드젠 결과:
 ```go
-sortCol := validateSort(r.URL.Query().Get("sort"), []string{"start_at", "created_at"}, "start_at")
-sortDir := validateDirection(r.URL.Query().Get("direction"), "desc")
+if v := c.Query("sort"); v != "" {
+    opts.SortCol = v
+}
 ```
 
 #### x-filter — 필터
@@ -392,26 +412,11 @@ x-filter:
   allowed: [status, room_id]       # 필터 가능 컬럼
 ```
 
-코드젠 결과:
-```go
-filters := parseFilters(r.URL.Query(), []string{"status", "room_id"})
-```
-
 #### x-include — 정방향 FK include
 
 ```yaml
 x-include:
   allowed: [room_id:rooms.id, user_id:users.id]   # FK컬럼:참조테이블.참조컬럼
-```
-
-문법 (단일 형식만 허용):
-- `room_id:rooms.id` — 정방향 FK 관계 (reservations.room_id → rooms.id)
-- 런타임 include 이름: FK 컬럼에서 `_id` 제거 (`room_id` → `room`)
-- 역방향 FK (1:N)는 지원하지 않음 — 별도 엔드포인트로 처리
-
-코드젠 결과:
-```go
-includes := parseIncludes(r.URL.Query().Get("include"), []string{"room", "user"})
 ```
 
 #### 복합 예시
@@ -453,9 +458,8 @@ func ListReservations(w http.ResponseWriter, r *http.Request) {}
 
 ### Go interface 규칙
 
-- interface 타입명 → component (lcFirst: `Notification` → `notification`)
-- interface 메서드 → 모델 메서드로도 등록
-- `@func`은 `package.funcName` 형식 필수 (e.g. `auth.verifyPassword`). 외부 패키지 함수를 호출하는 코드만 생성
+- interface 메서드 → 모델 메서드로 등록
+- `@func`은 `package.funcName` 형식 필수 (e.g. `auth.verifyPassword`). 외부 패키지 함수를 호출하는 코드만 생성. import 경로는 spec 파일의 Go import 블록에서 가져옴
 
 ### @dto 태그
 
@@ -540,7 +544,10 @@ WARNING 예시: put/delete 후 갱신 없이 response에서 이전 변수를 사
 // specs/service/login.go
 package service
 
-import "net/http"
+import (
+    "net/http"
+    "github.com/geul-org/fullend/pkg/auth"
+)
 
 // @sequence get
 // @model User.FindByEmail
@@ -573,47 +580,46 @@ func Login(w http.ResponseWriter, r *http.Request) {}
 package service
 
 import (
-	"encoding/json"
-	"net/http"
+    "net/http"
 
-	"<module>/internal/auth"
+    "github.com/gin-gonic/gin"
+    "github.com/geul-org/fullend/pkg/auth"
 )
 
-func Login(w http.ResponseWriter, r *http.Request) {
-	email := r.FormValue("Email")
-	password := r.FormValue("Password")
+func Login(c *gin.Context) {
+    email := c.Query("Email")
+    password := c.Query("Password")
 
-	// get
-	user, err := userModel.FindByEmail(email)
-	if err != nil {
-		http.Error(w, "User 조회 실패", http.StatusInternalServerError)
-		return
-	}
+    // get
+    user, err := userModel.FindByEmail(email)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "User 조회 실패"})
+        return
+    }
 
-	// guard nil
-	if user == nil {
-		http.Error(w, "사용자를 찾을 수 없습니다", http.StatusNotFound)
-		return
-	}
+    // guard nil
+    if user == nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "사용자를 찾을 수 없습니다"})
+        return
+    }
 
-	// call func
-	_, err = auth.VerifyPassword(auth.VerifyPasswordInput{PasswordHash: user.PasswordHash, Password: password})
-	if err != nil {
-		http.Error(w, "비밀번호가 일치하지 않습니다", http.StatusUnauthorized)
-		return
-	}
+    // call func
+    _, err = auth.VerifyPassword(auth.VerifyPasswordRequest{PasswordHash: user.PasswordHash, Password: password})
+    if err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "비밀번호가 일치하지 않습니다"})
+        return
+    }
 
-	// post
-	token, err := sessionModel.Create(user.ID)
-	if err != nil {
-		http.Error(w, "Session 생성 실패", http.StatusInternalServerError)
-		return
-	}
+    // post
+    token, err := sessionModel.Create(user.ID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Session 생성 실패"})
+        return
+    }
 
-	// response json
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"token": token,
-	})
+    // response json
+    c.JSON(http.StatusOK, gin.H{
+        "token": token,
+    })
 }
 ```
