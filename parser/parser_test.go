@@ -72,8 +72,8 @@ func TestParseDeleteProject(t *testing.T) {
 	if sf.Name != "DeleteProject" {
 		t.Errorf("함수명: got %q, want %q", sf.Name, "DeleteProject")
 	}
-	if len(sf.Sequences) != 9 {
-		t.Fatalf("sequence 수: got %d, want 9", len(sf.Sequences))
+	if len(sf.Sequences) != 8 {
+		t.Fatalf("sequence 수: got %d, want 8", len(sf.Sequences))
 	}
 
 	// sequence 0: authorize
@@ -105,31 +105,22 @@ func TestParseDeleteProject(t *testing.T) {
 	assertStr(t, "seq[4].Target", s.Target, "sessionCount")
 	assertStr(t, "seq[4].Message", s.Message, "하위 세션이 존재하여 삭제할 수 없습니다")
 
-	// sequence 5: call @component
+	// sequence 5: call @func with package
 	s = sf.Sequences[5]
 	assertStr(t, "seq[5].Type", s.Type, "call")
-	assertStr(t, "seq[5].Component", s.Component, "notification")
-	assertParams(t, "seq[5].Params", s.Params, []Param{
-		{Name: "project.OwnerEmail"},
-		{Name: `"프로젝트가 삭제됩니다"`},
-	})
+	assertStr(t, "seq[5].Package", s.Package, "cleanup")
+	assertStr(t, "seq[5].Func", s.Func, "projectResources")
+	assertParams(t, "seq[5].Params", s.Params, []Param{{Name: "project"}})
+	assertResult(t, "seq[5].Result", s.Result, "cleaned", "bool")
 
-	// sequence 6: call @func with package
+	// sequence 6: delete
 	s = sf.Sequences[6]
-	assertStr(t, "seq[6].Type", s.Type, "call")
-	assertStr(t, "seq[6].Package", s.Package, "cleanup")
-	assertStr(t, "seq[6].Func", s.Func, "projectResources")
-	assertParams(t, "seq[6].Params", s.Params, []Param{{Name: "project"}})
-	assertResult(t, "seq[6].Result", s.Result, "cleaned", "bool")
+	assertStr(t, "seq[6].Type", s.Type, "delete")
+	assertStr(t, "seq[6].Model", s.Model, "Project.Delete")
 
-	// sequence 7: delete
+	// sequence 7: response json
 	s = sf.Sequences[7]
-	assertStr(t, "seq[7].Type", s.Type, "delete")
-	assertStr(t, "seq[7].Model", s.Model, "Project.Delete")
-
-	// sequence 8: response json
-	s = sf.Sequences[8]
-	assertStr(t, "seq[8].Type", s.Type, "response json")
+	assertStr(t, "seq[7].Type", s.Type, "response json")
 }
 
 func TestParseDir(t *testing.T) {
@@ -158,7 +149,6 @@ func TestParseTag(t *testing.T) {
 		{"@var session", "var", "session"},
 		{"@action delete", "action", "delete"},
 		{"@sequence guard nil project", "sequence", "guard nil project"},
-		{"@component notification", "component", "notification"},
 		{"@func cleanup.projectResources", "func", "cleanup.projectResources"},
 		{"@id ProjectID", "id", "ProjectID"},
 		{"@resource project", "resource", "project"},

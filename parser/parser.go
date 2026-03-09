@@ -126,8 +126,6 @@ func parseCommentList(comments []*ast.Comment) []Sequence {
 			current.Resource = value
 		case "id":
 			current.ID = value
-		case "component":
-			current.Component = value
 		case "func":
 			if dot := strings.Index(value, "."); dot >= 0 {
 				current.Package = value[:dot]

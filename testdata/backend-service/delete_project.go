@@ -24,11 +24,6 @@ import "net/http"
 // @message "하위 세션이 존재하여 삭제할 수 없습니다"
 
 // @sequence call
-// @component notification
-// @param project.OwnerEmail
-// @param "프로젝트가 삭제됩니다"
-
-// @sequence call
 // @func cleanup.projectResources
 // @param project
 // @result cleaned bool

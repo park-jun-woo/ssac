@@ -25,11 +25,6 @@ import "net/http"
 // @param ReservationID request
 // @param "cancelled"
 
-// @sequence call
-// @component notification
-// @param reservation
-// @param "예약이 취소되었습니다"
-
 // @sequence response json
 // @var reservation
 // @var refund

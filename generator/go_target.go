@@ -195,9 +195,7 @@ type templateData struct {
 	Resource string
 	ID       string
 	// call
-	Component       string
-	ComponentMethod string
-	Func            string
+	Func string
 	PkgName         string // @func 패키지명 (e.g. "auth")
 	PkgField        string // Handler struct 필드명 (e.g. "Auth") — 현재 미사용
 	FuncMethod      string // PascalCase 메서드명 (e.g. "HashPassword")
@@ -271,8 +269,6 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, resultTypes map[s
 	d.ID = resolveParamRef(seq.ID)
 
 	// call
-	d.Component = seq.Component
-	d.ComponentMethod = "Execute"
 	d.Func = seq.Func
 
 	// call func with package
@@ -318,9 +314,6 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, resultTypes map[s
 
 func templateName(seq parser.Sequence) string {
 	if seq.Type == parser.SeqCall {
-		if seq.Component != "" {
-			return "call_component"
-		}
 		return "call_func"
 	}
 	if strings.HasPrefix(seq.Type, "response") {
@@ -688,9 +681,6 @@ func defaultMessage(seq parser.Sequence) string {
 	case parser.SeqAuthorize:
 		return "권한이 없습니다"
 	case parser.SeqCall:
-		if seq.Component != "" {
-			return seq.Component + " 호출 실패"
-		}
 		if seq.Func != "" {
 			return seq.Func + " 호출 실패"
 		}

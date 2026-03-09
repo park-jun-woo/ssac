@@ -131,28 +131,16 @@ func TestValidateCallFuncMissingPackage(t *testing.T) {
 	assertContainsError(t, errs, "@func", "package.funcName 형식")
 }
 
-func TestValidateCallMissingBoth(t *testing.T) {
+func TestValidateCallMissingFunc(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name:     "Test",
 		FileName: "test.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqCall}, // component, func 둘 다 없음
+			{Type: parser.SeqCall}, // @func 없음
 		},
 	}
 	errs := Validate([]parser.ServiceFunc{sf})
-	assertContainsError(t, errs, "@component/@func", "둘 다 누락")
-}
-
-func TestValidateCallBothSet(t *testing.T) {
-	sf := parser.ServiceFunc{
-		Name:     "Test",
-		FileName: "test.go",
-		Sequences: []parser.Sequence{
-			{Type: parser.SeqCall, Component: "a", Func: "b"}, // 둘 다 있음
-		},
-	}
-	errs := Validate([]parser.ServiceFunc{sf})
-	assertContainsError(t, errs, "@component/@func", "둘 다 지정")
+	assertContainsError(t, errs, "@func", "누락")
 }
 
 // --- @model 형식 검증 ---
@@ -222,7 +210,7 @@ func TestValidateVarFlowDotNotation(t *testing.T) {
 		Name:     "Test",
 		FileName: "test.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqCall, Component: "notify",
+			{Type: parser.SeqCall, Func: "notify", Package: "pkg",
 				Params: []parser.Param{{Name: "user.Email"}}}, // user 미선언
 		},
 	}
@@ -237,7 +225,7 @@ func TestValidateVarFlowDotNotationAfterDecl(t *testing.T) {
 		Sequences: []parser.Sequence{
 			{Type: parser.SeqGet, Model: "U.Find", Result: &parser.Result{Var: "user", Type: "U"},
 				Params: []parser.Param{{Name: "ID", Source: "request"}}},
-			{Type: parser.SeqCall, Component: "notify",
+			{Type: parser.SeqCall, Func: "notify", Package: "pkg",
 				Params: []parser.Param{{Name: "user.Email"}}}, // user 선언됨 → OK
 		},
 	}
@@ -267,7 +255,7 @@ func TestValidateVarFlowLiteralNotChecked(t *testing.T) {
 		Name:     "Test",
 		FileName: "test.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqCall, Component: "notify",
+			{Type: parser.SeqCall, Func: "notify", Package: "pkg",
 				Params: []parser.Param{{Name: `"리터럴 값"`}}}, // 리터럴은 검증 안 함
 		},
 	}
@@ -382,15 +370,7 @@ func TestLoadSymbolTable(t *testing.T) {
 		t.Errorf("Login PathParams: got %d, want 0", len(loginOp.PathParams))
 	}
 
-	// Components
-	if !st.Components["notification"] {
-		t.Error("component notification 없음")
-	}
-
 	// Go interface → Model로도 등록
-	if _, ok := st.Models["Notification"]; !ok {
-		t.Error("Notification 모델 없음 (interface에서)")
-	}
 	if _, ok := st.Models["Session"]; !ok {
 		t.Error("Session 모델 없음 (interface에서)")
 	}
@@ -466,8 +446,7 @@ func TestValidateWithSymbolsUnknownModel(t *testing.T) {
 	st := &SymbolTable{
 		Models:     map[string]ModelSymbol{},
 		Operations: map[string]OperationSymbol{},
-		Components: map[string]bool{},
-		Funcs:      map[string]bool{},
+		Funcs: map[string]bool{},
 	}
 	sf := parser.ServiceFunc{
 		Name:     "Test",
@@ -490,7 +469,6 @@ func TestValidateWithSymbolsUnknownMethod(t *testing.T) {
 			"User": {Methods: map[string]MethodInfo{"FindByID": {}}},
 		},
 		Operations: map[string]OperationSymbol{},
-		Components: map[string]bool{},
 		Funcs:      map[string]bool{},
 	}
 	sf := parser.ServiceFunc{
@@ -519,8 +497,7 @@ func TestValidateWithSymbolsMissingRequestField(t *testing.T) {
 				ResponseFields: map[string]bool{},
 			},
 		},
-		Components: map[string]bool{},
-		Funcs:      map[string]bool{},
+		Funcs: map[string]bool{},
 	}
 	sf := parser.ServiceFunc{
 		Name:     "Test",
@@ -546,8 +523,7 @@ func TestValidateWithSymbolsMissingResponseField(t *testing.T) {
 				ResponseFields: map[string]bool{"user": true},
 			},
 		},
-		Components: map[string]bool{},
-		Funcs:      map[string]bool{},
+		Funcs: map[string]bool{},
 	}
 	sf := parser.ServiceFunc{
 		Name:     "Test",
@@ -560,35 +536,13 @@ func TestValidateWithSymbolsMissingResponseField(t *testing.T) {
 	assertContainsError(t, errs, "@var", "token")
 }
 
-// --- 외부 검증 실패 케이스: 존재하지 않는 component ---
-
-func TestValidateWithSymbolsUnknownComponent(t *testing.T) {
-	st := &SymbolTable{
-		Models:     map[string]ModelSymbol{},
-		Operations: map[string]OperationSymbol{},
-		Components: map[string]bool{"notification": true},
-		Funcs:      map[string]bool{},
-	}
-	sf := parser.ServiceFunc{
-		Name:     "Test",
-		FileName: "test.go",
-		Sequences: []parser.Sequence{
-			{Type: parser.SeqCall, Component: "emailer",
-				Params: []parser.Param{{Name: `"hello"`}}},
-		},
-	}
-	errs := ValidateWithSymbols([]parser.ServiceFunc{sf}, st)
-	assertContainsError(t, errs, "@component", "emailer")
-}
-
 // --- 외부 검증 실패 케이스: @func 패키지 없음 ---
 
 func TestValidateWithSymbolsUnknownFunc(t *testing.T) {
 	st := &SymbolTable{
 		Models:     map[string]ModelSymbol{},
 		Operations: map[string]OperationSymbol{},
-		Components: map[string]bool{},
-		Funcs:      map[string]bool{"calculateRefund": true},
+		Funcs: map[string]bool{"calculateRefund": true},
 	}
 	sf := parser.ServiceFunc{
 		Name:     "Test",

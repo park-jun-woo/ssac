@@ -23,7 +23,6 @@ func ValidateWithSymbols(funcs []parser.ServiceFunc, st *SymbolTable) []Validati
 		errs = append(errs, validateModel(sf, st)...)
 		errs = append(errs, validateRequest(sf, st)...)
 		errs = append(errs, validateResponse(sf, st)...)
-		errs = append(errs, validateCallTarget(sf, st)...)
 	}
 	return errs
 }
@@ -106,23 +105,6 @@ func validateResponse(sf parser.ServiceFunc, st *SymbolTable) []ValidationError 
 	return errs
 }
 
-// validateCallTarget은 @component/@func이 심볼 테이블에 존재하는지 검증한다.
-func validateCallTarget(sf parser.ServiceFunc, st *SymbolTable) []ValidationError {
-	var errs []ValidationError
-	for i, seq := range sf.Sequences {
-		if seq.Type != parser.SeqCall {
-			continue
-		}
-		ctx := errCtx{sf.FileName, sf.Name, i}
-		if seq.Component != "" && !st.Components[seq.Component] {
-			errs = append(errs, ctx.err("@component", fmt.Sprintf("%q 컴포넌트를 찾을 수 없습니다", seq.Component)))
-		}
-		// @func with package: 외부 패키지이므로 model/ 교차검증 스킵
-		// @func without package: validateRequiredFields에서 이미 ERROR
-	}
-	return errs
-}
-
 // validateRequiredFields는 타입별 필수 태그 누락을 검증한다.
 func validateRequiredFields(sf parser.ServiceFunc) []ValidationError {
 	var errs []ValidationError
@@ -171,11 +153,8 @@ func validateRequiredFields(sf parser.ServiceFunc) []ValidationError {
 			}
 
 		case parser.SeqCall:
-			if seq.Component == "" && seq.Func == "" {
-				errs = append(errs, ctx.err("@component/@func", "둘 다 누락"))
-			}
-			if seq.Component != "" && seq.Func != "" {
-				errs = append(errs, ctx.err("@component/@func", "둘 다 지정됨, 하나만 사용"))
+			if seq.Func == "" {
+				errs = append(errs, ctx.err("@func", "누락"))
 			}
 			if seq.Func != "" && seq.Package == "" {
 				errs = append(errs, ctx.err("@func", "@func는 package.funcName 형식이어야 함"))

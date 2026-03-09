@@ -81,15 +81,6 @@ var goTemplates = template.Must(template.New("").Parse(`
 	}
 {{end}}
 
-{{- define "call_component" -}}
-	// call component
-	{{if .Result}}{{.Result.Var}}, {{end}}err {{if .FirstErr}}:={{else}}={{end}} {{.Component}}.{{.ComponentMethod}}({{.ParamArgs}})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
-		return
-	}
-{{end}}
-
 {{- define "call_func" -}}
 	// call func
 	{{if .Result}}out{{else}}_{{end}}, err {{if .FirstErr}}:={{else}}={{end}} {{.PkgName}}.{{.FuncMethod}}({{.PkgName}}.{{.FuncMethod}}Request{ {{.InputFields}} })

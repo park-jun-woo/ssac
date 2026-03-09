@@ -23,9 +23,8 @@ type Sequence struct {
 	Resource string // @resource
 	ID       string // @id
 	// call 전용
-	Component string // @component
-	Func      string // @func (funcName only, e.g. "hashPassword")
-	Package   string // @func package (e.g. "auth")
+	Func    string // @func (funcName only, e.g. "hashPassword")
+	Package string // @func package (e.g. "auth")
 }
 
 // Param은 @param 태그의 파싱 결과다.

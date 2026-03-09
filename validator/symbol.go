@@ -17,7 +17,6 @@ import (
 type SymbolTable struct {
 	Models     map[string]ModelSymbol     // "User" → {Methods: {"FindByID": ...}}
 	Operations map[string]OperationSymbol // "Login" → {RequestFields, ResponseFields}
-	Components map[string]bool            // "notification" → true
 	Funcs      map[string]bool            // "calculateRefund" → true
 	DDLTables  map[string]DDLTable        // "users" → {Columns: {"id": "int64", ...}}
 	DTOs       map[string]bool            // "Token" → true (DDL 테이블 없는 순수 DTO)
@@ -111,12 +110,11 @@ type XInclude struct {
 //
 //	<root>/db/queries/*.sql  — sqlc 쿼리 (모델+메서드)
 //	<root>/api/openapi.yaml  — OpenAPI spec (request/response)
-//	<root>/model/*.go        — Go interface (component, func)
+//	<root>/model/*.go        — Go interface, func
 func LoadSymbolTable(root string) (*SymbolTable, error) {
 	st := &SymbolTable{
 		Models:     make(map[string]ModelSymbol),
 		Operations: make(map[string]OperationSymbol),
-		Components: make(map[string]bool),
 		Funcs:      make(map[string]bool),
 		DDLTables:  make(map[string]DDLTable),
 		DTOs:       make(map[string]bool),
@@ -346,11 +344,8 @@ func (st *SymbolTable) loadGoInterfaces(dir string) error {
 					hasDtoTag = false // 다음 spec을 위해 리셋
 				}
 
-				// interface → component로 등록 (소문자 이름)
+				// interface → Models에 등록
 				if _, ok := ts.Type.(*ast.InterfaceType); ok {
-					componentName := strings.ToLower(ts.Name.Name[:1]) + ts.Name.Name[1:]
-					st.Components[componentName] = true
-
 					// interface의 메서드도 Models에 등록
 					ms := ModelSymbol{Methods: make(map[string]MethodInfo)}
 					iface := ts.Type.(*ast.InterfaceType)

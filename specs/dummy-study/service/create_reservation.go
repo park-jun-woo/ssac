@@ -33,11 +33,6 @@ import "net/http"
 // @param EndAt request
 // @result reservation Reservation
 
-// @sequence call
-// @component notification
-// @param reservation
-// @param "예약이 확정되었습니다"
-
 // @sequence response json
 // @var reservation
 func CreateReservation(w http.ResponseWriter, r *http.Request) {}
