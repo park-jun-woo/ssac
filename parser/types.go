@@ -5,6 +5,7 @@ type ServiceFunc struct {
 	Name      string     // 함수명 (e.g. "CreateSession")
 	FileName  string     // 원본 파일명 (e.g. "create_session.go")
 	Domain    string     // 도메인 폴더명 (e.g. "auth"). 빈 문자열이면 루트.
+	Imports   []string   // spec 파일의 import 경로 ("net/http" 제외)
 	Sequences []Sequence // 순서 보존된 sequence 리스트
 }
 
@@ -36,8 +37,9 @@ type Param struct {
 
 // Result는 @result 태그의 파싱 결과다.
 type Result struct {
-	Var  string // 변수명 (e.g. "project")
-	Type string // 타입명 (e.g. "Project")
+	Var   string // 변수명 (e.g. "project")
+	Type  string // 타입명 (e.g. "Project")
+	Field string // Response struct 필드명 (e.g. "AccessToken"). 비어있으면 ucFirst(Var) 사용.
 }
 
 // sequence 타입 상수

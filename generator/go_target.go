@@ -38,7 +38,7 @@ func (g *GoTarget) GenerateFunc(sf parser.ServiceFunc, st *validator.SymbolTable
 
 	// request 파라미터 타입 결정 (path param은 제외)
 	typedParams := collectTypedRequestParams(sf.Sequences, st, pathParamSet)
-	imports := collectImports(sf.Sequences, typedParams)
+	imports := collectImports(sf.Sequences, typedParams, sf.Imports)
 
 	// package
 	pkgName := "service"
@@ -264,7 +264,11 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, resultTypes map[s
 		d.FuncMethod = ucFirst(seq.Func)
 		d.InputFields = buildInputFields(seq.Params)
 		if seq.Result != nil {
-			d.ResultField = ucFirst(seq.Result.Var)
+			if seq.Result.Field != "" {
+				d.ResultField = seq.Result.Field
+			} else {
+				d.ResultField = ucFirst(seq.Result.Var)
+			}
 		}
 		d.FuncErrStatus = "http.StatusInternalServerError"
 		if seq.Result == nil {
@@ -450,7 +454,8 @@ func generateExtractCode(varName, paramName, goType string) string {
 }
 
 // collectImports는 사용된 패키지를 수집한다.
-func collectImports(seqs []parser.Sequence, typedParams []typedRequestParam) []string {
+// specImports는 spec 파일의 Go import 선언에서 가져온 경로다.
+func collectImports(seqs []parser.Sequence, typedParams []typedRequestParam, specImports []string) []string {
 	seen := map[string]bool{
 		"net/http": true, // 항상 사용
 	}
@@ -461,8 +466,6 @@ func collectImports(seqs []parser.Sequence, typedParams []typedRequestParam) []s
 			seen["encoding/json"] = true
 		case seq.Type == parser.SeqGuardState:
 			seen["states/"+seq.Target+"state"] = true
-		case seq.Type == parser.SeqCall && seq.Package != "":
-			seen[seq.Package] = true
 		}
 	}
 
@@ -487,6 +490,10 @@ func collectImports(seqs []parser.Sequence, typedParams []typedRequestParam) []s
 	}
 	// 동적 import (states/*state 등)
 	for imp := range seen {
+		imports = append(imports, imp)
+	}
+	// spec 파일의 import (func 패키지 등)
+	for _, imp := range specImports {
 		imports = append(imports, imp)
 	}
 	return imports
@@ -552,6 +559,10 @@ func buildInputFields(params []parser.Param) string {
 		// request source: fieldName stays, fieldValue is lcFirst
 		if p.Source == "request" {
 			fieldValue = lcFirst(p.Name)
+		}
+		// -> 매핑: Request struct 필드명을 명시적으로 지정
+		if p.Column != "" {
+			fieldName = p.Column
 		}
 
 		fields = append(fields, fieldName+": "+fieldValue)

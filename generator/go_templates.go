@@ -87,7 +87,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 
 {{- define "call_func" -}}
 	// call func
-	{{if .Result}}out, {{end}}err {{if .FirstErr}}:={{else}}={{end}} {{.PkgName}}.{{.FuncMethod}}({{.PkgName}}.{{.FuncMethod}}Input{ {{.InputFields}} })
+	{{if .Result}}out{{else}}_{{end}}, err {{if .FirstErr}}:={{else}}={{end}} {{.PkgName}}.{{.FuncMethod}}({{.PkgName}}.{{.FuncMethod}}Request{ {{.InputFields}} })
 	if err != nil {
 		http.Error(w, "{{.Message}}", {{.FuncErrStatus}})
 		return

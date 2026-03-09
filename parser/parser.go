@@ -66,6 +66,7 @@ func ParseFile(path string) (*ServiceFunc, error) {
 		return &ServiceFunc{
 			Name:      fn.Name.Name,
 			FileName:  filepath.Base(path),
+			Imports:   collectImportsFromAST(f),
 			Sequences: sequences,
 		}, nil
 	}
@@ -207,13 +208,18 @@ func parseParam(value string) Param {
 	return p
 }
 
-// parseResult는 "@result var Type" 형식을 파싱한다.
+// parseResult는 "@result var Type" 또는 "@result var Type.Field" 형식을 파싱한다.
+// Type.Field가 있으면 Response struct의 필드명으로 사용한다.
 func parseResult(value string) *Result {
 	parts := strings.Fields(value)
 	if len(parts) < 2 {
 		return &Result{Var: parts[0]}
 	}
-	return &Result{Var: parts[0], Type: parts[1]}
+	typePart := parts[1]
+	if dot := strings.Index(typePart, "."); dot >= 0 {
+		return &Result{Var: parts[0], Type: typePart[:dot], Field: typePart[dot+1:]}
+	}
+	return &Result{Var: parts[0], Type: typePart}
 }
 
 // parseGuardTarget은 "guard nil project"에서 대상 변수 "project"를 추출한다.
@@ -231,4 +237,18 @@ func trimQuotes(s string) string {
 		return s[1 : len(s)-1]
 	}
 	return s
+}
+
+// collectImportsFromAST는 Go AST에서 import 경로를 수집한다.
+// codegen이 자동 추가하는 "net/http"는 제외한다.
+func collectImportsFromAST(f *ast.File) []string {
+	var imports []string
+	for _, imp := range f.Imports {
+		path := strings.Trim(imp.Path.Value, `"`)
+		if path == "net/http" {
+			continue
+		}
+		imports = append(imports, path)
+	}
+	return imports
 }

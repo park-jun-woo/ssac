@@ -83,7 +83,7 @@ func TestGenerateDeleteProject(t *testing.T) {
 		{"guard exists", "if sessionCount > 0"},
 		{"guard exists msg", "하위 세션이 존재하여 삭제할 수 없습니다"},
 		{"call component", "notification"},
-		{"call func", "cleanup.ProjectResources(cleanup.ProjectResourcesInput{"},
+		{"call func", "cleanup.ProjectResources(cleanup.ProjectResourcesRequest{"},
 		{"delete", "projectModel.Delete(projectID)"},
 	}
 

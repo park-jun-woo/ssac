@@ -239,22 +239,27 @@ func TestParseParam(t *testing.T) {
 
 func TestParseResult(t *testing.T) {
 	tests := []struct {
-		value    string
-		wantVar  string
-		wantType string
+		value     string
+		wantVar   string
+		wantType  string
+		wantField string
 	}{
-		{"project Project", "project", "Project"},
-		{"session Session", "session", "Session"},
-		{"sessionCount int", "sessionCount", "int"},
-		{"cleaned bool", "cleaned", "bool"},
+		{"project Project", "project", "Project", ""},
+		{"session Session", "session", "Session", ""},
+		{"sessionCount int", "sessionCount", "int", ""},
+		{"cleaned bool", "cleaned", "bool", ""},
 		// 타입 없는 경우
-		{"project", "project", ""},
+		{"project", "project", "", ""},
+		// Type.Field 형식
+		{"token Token.AccessToken", "token", "Token", "AccessToken"},
+		{"refund Refund.Amount", "refund", "Refund", "Amount"},
 	}
 
 	for _, tt := range tests {
 		got := parseResult(tt.value)
-		if got.Var != tt.wantVar || got.Type != tt.wantType {
-			t.Errorf("parseResult(%q) = (%q, %q), want (%q, %q)", tt.value, got.Var, got.Type, tt.wantVar, tt.wantType)
+		if got.Var != tt.wantVar || got.Type != tt.wantType || got.Field != tt.wantField {
+			t.Errorf("parseResult(%q) = (%q, %q, %q), want (%q, %q, %q)",
+				tt.value, got.Var, got.Type, got.Field, tt.wantVar, tt.wantType, tt.wantField)
 		}
 	}
 }
@@ -530,6 +535,46 @@ func TestParseDirRecursive(t *testing.T) {
 
 	assertStr(t, "funcs[1].Name", funcs[1].Name, "Login")
 	assertStr(t, "funcs[1].Domain", funcs[1].Domain, "")
+}
+
+// --- import 파싱 ---
+
+func TestParseFileImports(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "login.go")
+	content := `package service
+
+import (
+	"net/http"
+	"github.com/geul-org/fullend/pkg/auth"
+)
+
+// @sequence call
+// @func auth.verifyPassword
+// @param user.PasswordHash
+// @param Password request
+// @message "비밀번호가 일치하지 않습니다"
+
+// @sequence response json
+func Login(w http.ResponseWriter, r *http.Request) {}
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	sf, err := ParseFile(path)
+	if err != nil {
+		t.Fatalf("파싱 실패: %v", err)
+	}
+	if sf == nil {
+		t.Fatal("ServiceFunc가 nil")
+	}
+
+	// net/http는 제외, auth 패키지만 포함
+	if len(sf.Imports) != 1 {
+		t.Fatalf("Imports 수: got %d, want 1, imports: %v", len(sf.Imports), sf.Imports)
+	}
+	assertStr(t, "Imports[0]", sf.Imports[0], "github.com/geul-org/fullend/pkg/auth")
 }
 
 // --- 헬퍼 ---
