@@ -95,9 +95,11 @@ func TestGenerateState(t *testing.T) {
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	assertContains(t, code, `reservationstate.CanTransition(reservationstate.Input{`)
+	assertContains(t, code, `err := reservationstate.CanTransition(reservationstate.Input{`)
 	assertContains(t, code, `Status: reservation.Status`)
 	assertContains(t, code, `"cancel"`)
+	assertContains(t, code, `err != nil`)
+	assertContains(t, code, `err.Error()`)
 }
 
 func TestGenerateAuth(t *testing.T) {

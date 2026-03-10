@@ -54,8 +54,8 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{end}}
 
 {{- define "state" -}}
-	if !{{.DiagramID}}state.CanTransition({{.DiagramID}}state.Input{ {{.InputFields}} }, "{{.Transition}}") {
-		c.JSON(http.StatusConflict, gin.H{"error": "{{.Message}}"})
+	if err := {{.DiagramID}}state.CanTransition({{.DiagramID}}state.Input{ {{.InputFields}} }, "{{.Transition}}"); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
 {{end}}

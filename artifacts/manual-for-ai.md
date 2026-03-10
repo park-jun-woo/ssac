@@ -74,7 +74,7 @@ Target: variable (`course`) or variable.field (`course.InstructorID`)
 ```
 
 - `{inputs}`: JSON-style input mapping to state diagram package
-- Codegen: `{id}state.CanTransition({id}state.Input{...}, "transition")`
+- Codegen: `err := {id}state.CanTransition({id}state.Input{...}, "transition")` (returns error)
 
 ### Auth — OPA Permission Check
 
@@ -193,7 +193,7 @@ Additional features when symbol table (external SSOT) is available:
   - SSaC: all args included (request, currentUser, variable refs, literals→DDL reverse-mapping, query→`opts QueryOpts`)
   - OpenAPI x-: infrastructure params validated against SSaC `query` usage
 - **Domain folder structure**: `service/auth/login.go` → `Domain="auth"` → `outDir/auth/login.go`, `package auth`
-- **@state codegen**: `@state {id} {inputs} "transition"` → `{id}state.CanTransition({id}state.Input{...}, "transition")`, import `"states/{id}state"`
+- **@state codegen**: `@state {id} {inputs} "transition"` → `err := {id}state.CanTransition({id}state.Input{...}, "transition")` (error return), import `"states/{id}state"`
 - **@auth codegen**: `@auth "action" "resource" {inputs}` → `authz.Check(currentUser, "action", "resource", authz.Input{...})`
 - **@call codegen**: `@call pkg.Func(args)` → `pkg.Func(pkg.FuncRequest{args...})` (unkeyed positional). No result → `_, err` guard-style (401), with result → value-style (500)
 - **Spec file imports**: Parser collects Go import declarations from spec files and passes them to generated code

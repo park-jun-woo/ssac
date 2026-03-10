@@ -243,10 +243,10 @@ if reservationCount == 0 { ... }
 
 코드젠:
 ```go
-if !reservationstate.CanTransition(reservationstate.Input{
+if err := reservationstate.CanTransition(reservationstate.Input{
     Status: reservation.Status,
-}, "cancel") {
-    c.JSON(http.StatusConflict, gin.H{"error": "취소할 수 없습니다"})
+}, "cancel"); err != nil {
+    c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
     return
 }
 ```
@@ -645,10 +645,10 @@ func CancelReservation(c *gin.Context) {
     }
 
     // state
-    if !reservationstate.CanTransition(reservationstate.Input{
+    if err := reservationstate.CanTransition(reservationstate.Input{
         Status: reservation.Status,
-    }, "cancel") {
-        c.JSON(http.StatusConflict, gin.H{"error": "취소할 수 없습니다"})
+    }, "cancel"); err != nil {
+        c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
         return
     }
 

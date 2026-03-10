@@ -136,7 +136,7 @@ When external SSOT (symbol table) is available, `ssac gen` adds:
   - OpenAPI x-extensions: validated against SSaC `query` usage
 - **Domain folder structure**: `service/auth/login.go` → outputs to `outDir/auth/login.go` with `package auth`
 - **@call codegen**: `pkg.Func(pkg.FuncRequest{args...})` (unkeyed positional). No result → `_, err` guard-style (401), with result → value-style (500)
-- **@state codegen**: `{id}state.CanTransition({id}state.Input{...}, "transition")`
+- **@state codegen**: `err := {id}state.CanTransition({id}state.Input{...}, "transition")` (returns error, not bool)
 - **@auth codegen**: `authz.Check(currentUser, "action", "resource", authz.Input{...})`
 - **Spec file imports**: Go import declarations in spec files are passed to generated code
 
