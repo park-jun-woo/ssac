@@ -19,7 +19,8 @@ type SymbolTable struct {
 	Operations map[string]OperationSymbol // "Login" → {RequestFields, ResponseFields}
 	Funcs      map[string]bool            // "calculateRefund" → true
 	DDLTables  map[string]DDLTable        // "users" → {Columns: {"id": "int64", ...}}
-	DTOs       map[string]bool            // "Token" → true (DDL 테이블 없는 순수 DTO)
+	DTOs               map[string]bool // "Token" → true (DDL 테이블 없는 순수 DTO)
+	HasCurrentUserType bool            // model/에 CurrentUser 타입이 정의되어 있으면 true
 }
 
 // ModelSymbol은 모델의 메서드 목록이다.
@@ -342,6 +343,11 @@ func (st *SymbolTable) loadGoInterfaces(dir string) error {
 				if hasDtoTag {
 					st.DTOs[ts.Name.Name] = true
 					hasDtoTag = false // 다음 spec을 위해 리셋
+				}
+
+				// CurrentUser 타입 감지
+				if ts.Name.Name == "CurrentUser" {
+					st.HasCurrentUserType = true
 				}
 
 				// interface → Models에 등록

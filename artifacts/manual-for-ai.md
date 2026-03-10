@@ -26,10 +26,13 @@ Go 1.24+, `go/ast` (parsing), `text/template` (codegen), `gopkg.in/yaml.v3` (Ope
 ```
 
 Args format: `source.Field` or `"literal"`
-- `request.CourseID` — from HTTP request
+- `request.CourseID` — from HTTP request (reserved source)
 - `course.InstructorID` — from previous result variable
-- `currentUser.ID` — from auth context
+- `currentUser.ID` — from auth context (reserved source)
+- `config.APIKey` — from environment config (reserved source)
 - `"cancelled"` — string literal
+
+Reserved sources: `request`, `currentUser`, `config` — cannot be used as result variable names.
 
 ### Guards
 

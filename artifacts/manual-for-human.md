@@ -92,10 +92,14 @@ func GetCourse() {}
 
 | 표기 | 의미 | 예시 |
 |---|---|---|
-| `request.Name` | HTTP 요청 파라미터 | `request.CourseID` |
+| `request.Name` | HTTP 요청 파라미터 (예약 소스) | `request.CourseID` |
 | `variable.Field` | 이전 결과 변수의 필드 | `course.InstructorID` |
-| `currentUser.Field` | 인증 컨텍스트 | `currentUser.ID` |
+| `currentUser.Field` | 인증 컨텍스트 (예약 소스) | `currentUser.ID` |
+| `config.Field` | 환경 설정 (예약 소스) | `config.APIKey` |
 | `"literal"` | 문자열 리터럴 | `"cancelled"` |
+
+**예약 소스 (Reserved Sources)**: `request`, `currentUser`, `config`는 시스템이 사전 정의하는 특수 소스다.
+result 변수명으로 사용하면 validator에서 ERROR가 발생한다.
 
 ### 도메인 폴더 구조
 

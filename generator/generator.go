@@ -52,18 +52,54 @@ func GenerateWith(t Target, funcs []parser.ServiceFunc, outDir string, st *valid
 	return nil
 }
 
-// lcFirst는 첫 글자를 소문자로 변환한다.
+// commonInitialisms는 Go 컨벤션에서 대소문자를 통일하는 공통 이니셜리즘이다.
+// https://github.com/golang/lint/blob/master/lint.go#L770
+var commonInitialisms = map[string]bool{
+	"ACL": true, "API": true, "ASCII": true, "CPU": true, "CSS": true,
+	"DNS": true, "EOF": true, "HTML": true, "HTTP": true, "HTTPS": true,
+	"ID": true, "IP": true, "JSON": true, "QPS": true, "RAM": true,
+	"RPC": true, "SLA": true, "SMTP": true, "SQL": true, "SSH": true,
+	"TCP": true, "TLS": true, "TTL": true, "UDP": true, "UI": true,
+	"UID": true, "UUID": true, "URI": true, "URL": true, "XML": true,
+}
+
+// lcFirst는 Go 컨벤션에 맞게 첫 "단어"를 소문자로 변환한다.
+// "ID" → "id", "CourseID" → "courseID", "HTTPClient" → "httpClient"
 func lcFirst(s string) string {
 	if s == "" {
 		return s
 	}
-	return strings.ToLower(s[:1]) + s[1:]
+	// 선행 대문자 연속 개수
+	upper := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 'A' && s[i] <= 'Z' {
+			upper++
+		} else {
+			break
+		}
+	}
+	if upper == 0 {
+		return s
+	}
+	if upper == 1 {
+		return strings.ToLower(s[:1]) + s[1:]
+	}
+	// 전부 대문자: "ID" → "id", "URL" → "url"
+	if upper == len(s) {
+		return strings.ToLower(s)
+	}
+	// 마지막 대문자는 다음 단어 시작: "IDParser" → "idParser", "HTTPClient" → "httpClient"
+	return strings.ToLower(s[:upper-1]) + s[upper-1:]
 }
 
-// ucFirst는 첫 글자를 대문자로 변환한다.
+// ucFirst는 Go 컨벤션에 맞게 첫 글자를 대문자로 변환한다.
+// 이니셜리즘이면 전부 대문자: "id" → "ID", "url" → "URL"
 func ucFirst(s string) string {
 	if s == "" {
 		return s
+	}
+	if commonInitialisms[strings.ToUpper(s)] {
+		return strings.ToUpper(s)
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
 }

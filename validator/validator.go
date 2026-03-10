@@ -23,6 +23,7 @@ func ValidateWithSymbols(funcs []parser.ServiceFunc, st *SymbolTable) []Validati
 		errs = append(errs, validateModel(sf, st)...)
 		errs = append(errs, validateRequest(sf, st)...)
 		errs = append(errs, validateResponse(sf, st)...)
+		errs = append(errs, validateCurrentUserType(sf, st)...)
 	}
 	return errs
 }
@@ -32,6 +33,7 @@ func validateFunc(sf parser.ServiceFunc) []ValidationError {
 	errs = append(errs, validateRequiredFields(sf)...)
 	errs = append(errs, validateVariableFlow(sf)...)
 	errs = append(errs, validateStaleResponse(sf)...)
+	errs = append(errs, validateReservedSourceConflict(sf)...)
 	return errs
 }
 
@@ -347,6 +349,74 @@ func validateResponse(sf parser.ServiceFunc, st *SymbolTable) []ValidationError 
 	}
 
 	return errs
+}
+
+// reservedSources는 사용자가 result 변수명으로 사용할 수 없는 예약 소스다.
+var reservedSources = map[string]bool{
+	"request":     true,
+	"currentUser": true,
+	"config":      true,
+}
+
+// validateReservedSourceConflict는 result 변수명이 예약 소스와 충돌하면 ERROR를 반환한다.
+func validateReservedSourceConflict(sf parser.ServiceFunc) []ValidationError {
+	var errs []ValidationError
+	for i, seq := range sf.Sequences {
+		if seq.Result == nil {
+			continue
+		}
+		if reservedSources[seq.Result.Var] {
+			ctx := errCtx{sf.FileName, sf.Name, i}
+			errs = append(errs, ctx.err("@"+seq.Type, fmt.Sprintf("%q는 예약 소스이므로 result 변수명으로 사용할 수 없습니다", seq.Result.Var)))
+		}
+	}
+	return errs
+}
+
+// validateCurrentUserType는 currentUser를 사용하는데 model/에 CurrentUser 타입이 없으면 WARNING을 반환한다.
+func validateCurrentUserType(sf parser.ServiceFunc, st *SymbolTable) []ValidationError {
+	if st == nil {
+		return nil
+	}
+
+	usesCurrentUser := false
+	for _, seq := range sf.Sequences {
+		if seq.Type == parser.SeqAuth {
+			usesCurrentUser = true
+			break
+		}
+		for _, a := range seq.Args {
+			if a.Source == "currentUser" {
+				usesCurrentUser = true
+				break
+			}
+		}
+		for _, val := range seq.Inputs {
+			if strings.HasPrefix(val, "currentUser.") {
+				usesCurrentUser = true
+				break
+			}
+		}
+		if usesCurrentUser {
+			break
+		}
+	}
+
+	if !usesCurrentUser {
+		return nil
+	}
+
+	if !st.HasCurrentUserType {
+		return []ValidationError{{
+			FileName: sf.FileName,
+			FuncName: sf.Name,
+			SeqIndex: -1,
+			Tag:      "@currentUser",
+			Message:  "currentUser를 사용하지만 model/에 CurrentUser 타입이 정의되지 않았습니다",
+			Level:    "WARNING",
+		}}
+	}
+	return nil
 }
 
 // argVarRef는 Arg가 변수 참조인 경우 루트 변수명을 반환한다.

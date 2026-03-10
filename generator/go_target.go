@@ -94,9 +94,10 @@ func (g *GoTarget) GenerateFunc(sf parser.ServiceFunc, st *validator.SymbolTable
 
 	// sequences
 	errDeclared := hasConversionErr(requestParams)
+	declaredVars := map[string]bool{}
 	funcHasTotal := false
 	for i, seq := range sf.Sequences {
-		data := buildTemplateData(seq, &errDeclared, resultTypes, st, sf.Name, needsQO)
+		data := buildTemplateData(seq, &errDeclared, declaredVars, resultTypes, st, sf.Name, needsQO)
 		if data.HasTotal {
 			funcHasTotal = true
 		}
@@ -180,9 +181,12 @@ type templateData struct {
 
 	// list
 	HasTotal bool
+
+	// reassign: result var already declared → use = instead of :=
+	ReAssign bool
 }
 
-func buildTemplateData(seq parser.Sequence, errDeclared *bool, resultTypes map[string]string, st *validator.SymbolTable, funcName string, hasQO bool) templateData {
+func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[string]bool, resultTypes map[string]string, st *validator.SymbolTable, funcName string, hasQO bool) templateData {
 	d := templateData{
 		Message: seq.Message,
 		Result:  seq.Result,
@@ -245,6 +249,14 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, resultTypes map[s
 
 	// Response
 	d.ResponseFields = seq.Fields
+
+	// result var reassign tracking
+	if seq.Result != nil {
+		if declaredVars[seq.Result.Var] {
+			d.ReAssign = true
+		}
+		declaredVars[seq.Result.Var] = true
+	}
 
 	// err declaration tracking
 	switch seq.Type {
@@ -322,9 +334,18 @@ func buildInputFieldsFromMap(inputs map[string]string) string {
 
 	var fields []string
 	for _, k := range keys {
-		fields = append(fields, ucFirst(k)+": "+inputs[k])
+		fields = append(fields, ucFirst(k)+": "+inputValueToCode(inputs[k]))
 	}
 	return strings.Join(fields, ", ")
+}
+
+// inputValueToCode는 inputs 값에 argToCode와 동일한 예약 소스 변환을 적용한다.
+func inputValueToCode(val string) string {
+	if strings.HasPrefix(val, "request.") {
+		return lcFirst(val[len("request."):])
+	}
+	// currentUser.Field, config.Field, 일반 변수 → 그대로
+	return val
 }
 
 // buildCallInputFields는 @call의 Args를 Input struct 필드로 변환한다.

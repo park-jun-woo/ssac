@@ -109,7 +109,7 @@ func TestGenerateAuth(t *testing.T) {
 	}
 	code := mustGenerate(t, sf, nil)
 	assertContains(t, code, `authz.Check(currentUser, "delete", "project", authz.Input{`)
-	assertContains(t, code, `Id: project.ID`)
+	assertContains(t, code, `ID: project.ID`)
 	assertContains(t, code, `Owner: project.OwnerID`)
 	assertContains(t, code, `currentUser := c.MustGet("currentUser")`)
 }
@@ -261,6 +261,36 @@ func TestGenerateFullExample(t *testing.T) {
 	assertContains(t, code, `"refund":`)
 }
 
+func TestGenerateReAssign(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name: "CancelReservation", FileName: "cancel_reservation.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Args: []parser.Arg{{Source: "request", Field: "ID"}, {Literal: "cancelled"}}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqResponse, Fields: map[string]string{"reservation": "reservation"}},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	// 첫 번째 @get: :=
+	assertContains(t, code, `reservation, err := reservationModel.FindByID`)
+	// 두 번째 @get: = (재선언)
+	assertContains(t, code, `reservation, err = reservationModel.FindByID`)
+}
+
+func TestGenerateAuthInputsRequestConversion(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name: "CreateReservation", FileName: "create_reservation.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqAuth, Action: "create", Resource: "reservation", Inputs: map[string]string{"id": "request.RoomID"}, Message: "권한 없음"},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	// request.RoomID → roomID
+	assertContains(t, code, `ID: roomID`)
+	assertNotContains(t, code, `request.RoomID`)
+}
+
 func TestGenerateLiteralArg(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "Cancel", FileName: "cancel.go",
@@ -269,7 +299,7 @@ func TestGenerateLiteralArg(t *testing.T) {
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	assertContains(t, code, `reservationModel.UpdateStatus(iD, "cancelled")`)
+	assertContains(t, code, `reservationModel.UpdateStatus(id, "cancelled")`)
 }
 
 func TestGenerateModelInterface(t *testing.T) {
@@ -320,6 +350,13 @@ func assertContains(t *testing.T, code, substr string) {
 	t.Helper()
 	if !strings.Contains(code, substr) {
 		t.Errorf("expected code to contain %q\n--- code ---\n%s", substr, code)
+	}
+}
+
+func assertNotContains(t *testing.T, code, substr string) {
+	t.Helper()
+	if strings.Contains(code, substr) {
+		t.Errorf("expected code NOT to contain %q\n--- code ---\n%s", substr, code)
 	}
 }
 

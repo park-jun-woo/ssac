@@ -51,10 +51,17 @@ ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블
 ```
 
 Args 형식: `source.Field` 또는 `"literal"`
-- `request.CourseID` — HTTP 요청 파라미터
+- `request.CourseID` — HTTP 요청 파라미터 (예약 소스)
 - `course.InstructorID` — 이전 결과 변수의 필드
-- `currentUser.ID` — 인증 컨텍스트
+- `currentUser.ID` — 인증 컨텍스트 (예약 소스)
+- `config.APIKey` — 환경 설정 (예약 소스)
 - `"cancelled"` — 문자열 리터럴
+
+예약 소스 (Reserved Sources): `request`, `currentUser`, `config`
+- 사용자가 선언하지 않는 특수 소스. result 변수명으로 사용 불가 (validator ERROR)
+- `request.Field` → 코드젠에서 `lcFirst(Field)` 로컬 변수로 치환
+- `currentUser.Field` → `currentUser.Field` 실제 변수 유지
+- `config.Field` → `config.Field` 실제 변수 유지
 
 타입별 필수 요소:
 

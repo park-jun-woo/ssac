@@ -8,7 +8,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{end}}
 
 {{- define "get" -}}
-	{{.Result.Var}}, {{if .HasTotal}}total, {{end}}err := {{.ModelCall}}({{.ArgsCode}})
+	{{.Result.Var}}, {{if .HasTotal}}total, {{end}}err {{if .ReAssign}}={{else}}:={{end}} {{.ModelCall}}({{.ArgsCode}})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
 		return
@@ -16,7 +16,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{end}}
 
 {{- define "post" -}}
-	{{.Result.Var}}, err := {{.ModelCall}}({{.ArgsCode}})
+	{{.Result.Var}}, err {{if .ReAssign}}={{else}}:={{end}} {{.ModelCall}}({{.ArgsCode}})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
 		return
@@ -68,7 +68,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{end}}
 
 {{- define "call_with_result" -}}
-	{{.Result.Var}}, err := {{.PkgName}}.{{.FuncMethod}}({{.PkgName}}.{{.FuncMethod}}Request{ {{.InputFields}} })
+	{{.Result.Var}}, err {{if .ReAssign}}={{else}}:={{end}} {{.PkgName}}.{{.FuncMethod}}({{.PkgName}}.{{.FuncMethod}}Request{ {{.InputFields}} })
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
 		return
