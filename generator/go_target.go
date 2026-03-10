@@ -434,8 +434,15 @@ func collectRequestParams(seqs []parser.Sequence, st *validator.SymbolTable, pat
 		}
 	}
 
-	// 2+ params → JSON body
-	if st != nil && len(rawParams) >= 2 {
+	// POST/PUT 핸들러이거나 2+ params → JSON body
+	hasBodySeq := false
+	for _, seq := range seqs {
+		if seq.Type == parser.SeqPost || seq.Type == parser.SeqPut {
+			hasBodySeq = true
+			break
+		}
+	}
+	if (st != nil && len(rawParams) >= 2) || (hasBodySeq && len(rawParams) >= 1) {
 		return buildJSONBodyParams(rawParams)
 	}
 
