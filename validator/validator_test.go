@@ -12,9 +12,9 @@ func TestValidateGetMissingResult(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{{
-			Type:  parser.SeqGet,
-			Model: "Course.FindByID",
-			Args:  []parser.Arg{{Source: "request", Field: "CourseID"}},
+			Type:   parser.SeqGet,
+			Model:  "Course.FindByID",
+			Inputs: map[string]string{"CourseID": "request.CourseID"},
 			// Result 누락
 		}},
 	}}
@@ -28,7 +28,7 @@ func TestValidatePutHasResult(t *testing.T) {
 		Sequences: []parser.Sequence{{
 			Type:   parser.SeqPut,
 			Model:  "Course.Update",
-			Args:   []parser.Arg{{Source: "request", Field: "Title"}},
+			Inputs: map[string]string{"Title": "request.Title"},
 			Result: &parser.Result{Type: "Course", Var: "course"}, // 있으면 안 됨
 		}},
 	}}
@@ -40,7 +40,7 @@ func TestValidateEmptyMissingMessage(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqEmpty, Target: "course"}, // Message 누락
 		},
 	}}
@@ -120,7 +120,7 @@ func TestValidateVariableFlowValid(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqEmpty, Target: "course", Message: "not found"},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
@@ -157,7 +157,7 @@ func TestValidateCurrentUserNoError(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetMy", FileName: "get_my.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Item.ListByUser", Args: []parser.Arg{{Source: "currentUser", Field: "ID"}}, Result: &parser.Result{Type: "[]Item", Var: "items"}},
+			{Type: parser.SeqGet, Model: "Item.ListByUser", Inputs: map[string]string{"ID": "currentUser.ID"}, Result: &parser.Result{Type: "[]Item", Var: "items"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"items": "items"}},
 		},
 	}}
@@ -171,7 +171,7 @@ func TestValidateArgVarRef(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetDetail", FileName: "get_detail.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "User.FindByID", Args: []parser.Arg{{Source: "course", Field: "InstructorID"}}, Result: &parser.Result{Type: "User", Var: "user"}},
+			{Type: parser.SeqGet, Model: "User.FindByID", Inputs: map[string]string{"InstructorID": "course.InstructorID"}, Result: &parser.Result{Type: "User", Var: "user"}},
 		},
 	}}
 	errs := Validate(funcs)
@@ -184,8 +184,8 @@ func TestValidateStaleResponse(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "Cancel", FileName: "cancel.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
-			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Args: []parser.Arg{{Source: "request", Field: "ID"}, {Literal: "cancelled"}}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Inputs: map[string]string{"ID": "request.ID", "Status": `"cancelled"`}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"reservation": "reservation"}},
 		},
 	}}
@@ -197,9 +197,9 @@ func TestValidateStaleResponseRefetched(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "Cancel", FileName: "cancel.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
-			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Args: []parser.Arg{{Source: "request", Field: "ID"}, {Literal: "cancelled"}}},
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Inputs: map[string]string{"ID": "request.ID", "Status": `"cancelled"`}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"reservation": "reservation"}},
 		},
 	}}
@@ -221,7 +221,7 @@ func TestValidateModelNotFound(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
 	}}
@@ -239,7 +239,7 @@ func TestValidateMethodNotFound(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
 	}}
@@ -255,7 +255,7 @@ func TestValidateCallSkipsModelCheck(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "Login", FileName: "login.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqCall, Model: "auth.VerifyPassword", Args: []parser.Arg{{Source: "request", Field: "Password"}}, Result: &parser.Result{Type: "Token", Var: "token"}},
+			{Type: parser.SeqCall, Model: "auth.VerifyPassword", Inputs: map[string]string{"Password": "request.Password"}, Result: &parser.Result{Type: "Token", Var: "token"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"token": "token"}},
 		},
 	}}
@@ -285,7 +285,7 @@ func TestValidateRequestFieldNotInOpenAPI(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "UnknownField"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"UnknownField": "request.UnknownField"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
 	}}
@@ -308,7 +308,7 @@ func TestValidateReverseRequestMissing(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "CourseID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"CourseID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
 	}}
@@ -332,7 +332,7 @@ func TestValidateReverseRequestPathParamSkip(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "CourseID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"CourseID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
 	}}
@@ -362,7 +362,7 @@ func TestValidateResponseFieldNotInOpenAPI(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "CourseID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"CourseID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course", "extra": "course.Name"}},
 		},
 	}}
@@ -386,7 +386,7 @@ func TestValidateReverseResponseMissing(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "CourseID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"CourseID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
 	}}
@@ -410,7 +410,7 @@ func TestValidateReverseResponsePaginationTotal(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "ListItems", FileName: "list_items.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Item.List", Args: []parser.Arg{{Source: "request", Field: "dummy"}}, Result: &parser.Result{Type: "[]Item", Var: "items"}},
+			{Type: parser.SeqGet, Model: "Item.List", Inputs: map[string]string{"Dummy": "request.dummy"}, Result: &parser.Result{Type: "[]Item", Var: "items"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"items": "items"}},
 		},
 	}}
@@ -443,8 +443,8 @@ func TestValidateStaleResponseSuppressed(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "Cancel", FileName: "cancel.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
-			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Args: []parser.Arg{{Source: "request", Field: "ID"}, {Literal: "cancelled"}}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Inputs: map[string]string{"ID": "request.ID", "Status": `"cancelled"`}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"reservation": "reservation"}, SuppressWarn: true},
 		},
 	}}
@@ -464,7 +464,7 @@ func TestValidateReservedSourceConflict(t *testing.T) {
 			funcs := []parser.ServiceFunc{{
 				Name: "Test", FileName: "test.go",
 				Sequences: []parser.Sequence{
-					{Type: parser.SeqGet, Model: "User.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "User", Var: name}},
+					{Type: parser.SeqGet, Model: "User.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "User", Var: name}},
 				},
 			}}
 			errs := Validate(funcs)
@@ -477,7 +477,7 @@ func TestValidateReservedSourceNonReservedOK(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "Test", FileName: "test.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "User.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "User", Var: "user"}},
+			{Type: parser.SeqGet, Model: "User.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "User", Var: "user"}},
 		},
 	}}
 	errs := Validate(funcs)
@@ -503,7 +503,7 @@ func TestValidateQueryUsageMissing(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "ListReservations", FileName: "list_reservations.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Reservation.List", Args: []parser.Arg{}, Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
+			{Type: parser.SeqGet, Model: "Reservation.List", Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
 		},
 	}}
 	errs := ValidateWithSymbols(funcs, st)
@@ -519,7 +519,7 @@ func TestValidateQueryUsageNoOpenAPI(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}, {Source: "query"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"ID": "request.ID", "Opts": "query"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 		},
 	}}
 	errs := ValidateWithSymbols(funcs, st)
@@ -539,7 +539,7 @@ func TestValidateQueryUsageMatch(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "ListReservations", FileName: "list_reservations.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Reservation.List", Args: []parser.Arg{{Source: "query"}}, Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
+			{Type: parser.SeqGet, Model: "Reservation.List", Inputs: map[string]string{"Opts": "query"}, Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
 		},
 	}}
 	errs := ValidateWithSymbols(funcs, st)

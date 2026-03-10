@@ -176,14 +176,14 @@ func parseLine(line string) (*Sequence, bool) {
 }
 
 // parseCRUD는 @get/@post/@put/@delete를 파싱한다.
-// hasResult=true: Type var = Model.Method(args)
-// hasResult=false: Model.Method(args)
+// hasResult=true: Type var = Model.Method({Key: val, ...})
+// hasResult=false: Model.Method({Key: val, ...})
 func parseCRUD(seqType, rest string, hasResult bool) *Sequence {
 	rest = strings.TrimSpace(rest)
 	seq := &Sequence{Type: seqType}
 
 	if hasResult {
-		// Type var = Model.Method(args)
+		// Type var = Model.Method({Key: val, ...})
 		eqIdx := strings.Index(rest, "=")
 		if eqIdx < 0 {
 			return nil
@@ -197,14 +197,14 @@ func parseCRUD(seqType, rest string, hasResult bool) *Sequence {
 		}
 		seq.Result = result
 
-		model, args := parseCallExpr(rhs)
+		model, inputs := parseCallExprInputs(rhs)
 		seq.Model = model
-		seq.Args = args
+		seq.Inputs = inputs
 	} else {
-		// Model.Method(args)
-		model, args := parseCallExpr(rest)
+		// Model.Method({Key: val, ...})
+		model, inputs := parseCallExprInputs(rest)
 		seq.Model = model
-		seq.Args = args
+		seq.Inputs = inputs
 	}
 
 	return seq

@@ -38,20 +38,21 @@ ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블
 ## DSL 문법 (v2 — 한 줄 표현식)
 
 ```go
-// @get Type var = Model.Method(args...)          — 리소스 조회 (result 필수)
-// @post Type var = Model.Method(args...)         — 리소스 생성 (result 필수)
-// @put Model.Method(args...)                     — 리소스 수정 (result 없음)
-// @delete Model.Method(args...)                  — 리소스 삭제 (result 없음)
-// @empty target "message"                        — nil이면 종료 (404)
-// @exists target "message"                       — 존재하면 종료 (409)
-// @state diagramID {inputs} "transition" "msg"   — 상태 전이 검사 (409)
-// @auth "action" "resource" {inputs} "message"   — 권한 검사 (403)
-// @call Type var = pkg.Func(args...)             — 외부 함수 호출 (result 있음/없음)
-// @response { field: var, field: var.Member }    — 응답 (멀티라인 블록)
+// @get Type var = Model.Method({Key: value, ...})          — 리소스 조회 (result 필수)
+// @post Type var = Model.Method({Key: value, ...})         — 리소스 생성 (result 필수)
+// @put Model.Method({Key: value, ...})                     — 리소스 수정 (result 없음)
+// @delete Model.Method({Key: value, ...})                  — 리소스 삭제 (result 없음)
+// @empty target "message"                                  — nil이면 종료 (404)
+// @exists target "message"                                 — 존재하면 종료 (409)
+// @state diagramID {inputs} "transition" "msg"             — 상태 전이 검사 (409)
+// @auth "action" "resource" {inputs} "message"             — 권한 검사 (403)
+// @call Type var = pkg.Func({Key: value, ...})             — 외부 함수 호출 (result 있음/없음)
+// @response { field: var, field: var.Member }              — 응답 (멀티라인 블록)
 // @type! — 모든 시퀀스에 ! 접미사로 WARNING 억제 (e.g. @delete!, @response!)
 ```
 
-Args 형식: `source.Field` 또는 `"literal"`
+Args 형식: 모든 시퀀스 타입에서 `{Key: value}` 통일 문법 사용 (CRUD, @call, @state, @auth)
+- value: `source.Field` 또는 `"literal"`
 - `request.CourseID` — HTTP 요청 파라미터 (예약 소스)
 - `course.InstructorID` — 이전 결과 변수의 필드
 - `currentUser.ID` — 인증 컨텍스트 (예약 소스)
@@ -65,14 +66,16 @@ Args 형식: `source.Field` 또는 `"literal"`
 - `config.Field` → `config.Field` 실제 변수 유지
 - `query` → 코드젠에서 `opts` (QueryOpts) 변수로 변환. OpenAPI x-extensions와 교차 검증
 
+파서 IR: 모든 시퀀스 타입이 `seq.Inputs` (map[string]string)을 사용. CRUD도 `seq.Args` 대신 `seq.Inputs` 사용.
+
 타입별 필수 요소:
 
 | 타입 | 필수 |
 |---|---|
-| get | Model, Result (Args 선택) |
-| post | Model, Result, Args |
-| put | Model, Args |
-| delete | Model, Args (0-arg WARNING, `@delete!`로 억제) |
+| get | Model, Result (Inputs 선택) |
+| post | Model, Result, Inputs |
+| put | Model, Inputs |
+| delete | Model (Inputs 선택, 0-input WARNING, `@delete!`로 억제) |
 | empty, exists | Target, Message |
 | state | DiagramID, Inputs, Transition, Message |
 | auth | Action, Resource, Message |
@@ -130,11 +133,11 @@ files/                           # 기초 자료
 - **타입 변환 코드젠**: DDL 컬럼 타입 기반 request 파라미터 변환 (int64→`strconv.ParseInt`, time.Time→`time.Parse`, 400 early return)
 - **Guard 값 타입**: result 타입에 따른 zero value 비교 (int→`== 0`/`> 0`, pointer→`== nil`/`!= nil`)
 - **Stale 데이터 경고**: put/delete 후 갱신 없이 response에 사용하면 WARNING
-- **QueryOpts**: SSaC에 `query` 예약 소스가 명시된 메서드에만 `opts QueryOpts` 전달 (암묵적 삽입 없음)
+- **QueryOpts**: SSaC에 `query` 예약 소스가 명시된 메서드에만 `opts QueryOpts` 전달 (암묵적 삽입 없음). `Model.List({..., query: query})`
 - **List 3-tuple 반환**: many + QueryOpts → `result, total, err :=` (count 포함)
-- **모델 인터페이스 파생**: 3 SSOT 교차(sqlc 카디널리티 + SSaC Args + OpenAPI x-확장) → `<outDir>/model/models_gen.go`
+- **모델 인터페이스 파생**: 3 SSOT 교차(sqlc 카디널리티 + SSaC Inputs + OpenAPI x-확장) → `<outDir>/model/models_gen.go`
 - **도메인 폴더 구조**: `service/<domain>/*.go` 필수 (flat service/*.go는 ERROR). `service/auth/login.go` → `Domain="auth"` → `outDir/auth/login.go`, `package auth`
-- **@call 코드젠**: `@call pkg.Func(args)` → `pkg.Func(pkg.FuncRequest{FieldName: value, ...})` (named field). result 없음→`_, err` guard형(401), 있음→value형(500)
+- **@call 코드젠**: `@call pkg.Func({Key: value})` → `pkg.Func(pkg.FuncRequest{Key: value, ...})`. result 없음→`_, err` guard형(401), 있음→value형(500)
 - **@state 코드젠**: `err := {id}state.CanTransition({id}state.Input{...}, "transition")` (error 반환), import `"states/{id}state"`
 - **@auth 코드젠**: `authz.Check(currentUser, "action", "resource", authz.Input{...})`
 - **Spec 파일 imports**: spec 파일의 Go import 선언이 생성 코드에 전달됨

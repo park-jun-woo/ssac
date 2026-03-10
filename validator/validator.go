@@ -61,8 +61,8 @@ func validateRequiredFields(sf parser.ServiceFunc) []ValidationError {
 			if seq.Result == nil {
 				errs = append(errs, ctx.err("@post", "Result 누락"))
 			}
-			if len(seq.Args) == 0 {
-				errs = append(errs, ctx.err("@post", "Args 누락"))
+			if len(seq.Inputs) == 0 {
+				errs = append(errs, ctx.err("@post", "Inputs 누락"))
 			}
 
 		case parser.SeqPut:
@@ -72,8 +72,8 @@ func validateRequiredFields(sf parser.ServiceFunc) []ValidationError {
 			if seq.Result != nil {
 				errs = append(errs, ctx.err("@put", "Result는 nil이어야 함"))
 			}
-			if len(seq.Args) == 0 {
-				errs = append(errs, ctx.err("@put", "Args 누락"))
+			if len(seq.Inputs) == 0 {
+				errs = append(errs, ctx.err("@put", "Inputs 누락"))
 			}
 
 		case parser.SeqDelete:
@@ -83,10 +83,10 @@ func validateRequiredFields(sf parser.ServiceFunc) []ValidationError {
 			if seq.Result != nil {
 				errs = append(errs, ctx.err("@delete", "Result는 nil이어야 함"))
 			}
-			if len(seq.Args) == 0 && !seq.SuppressWarn {
+			if len(seq.Inputs) == 0 && !seq.SuppressWarn {
 				errs = append(errs, ValidationError{
 					FileName: ctx.fileName, FuncName: ctx.funcName, SeqIndex: ctx.seqIndex,
-					Tag: "@delete", Message: "Args가 없습니다 — 전체 삭제 의도가 맞는지 확인하세요", Level: "WARNING",
+					Tag: "@delete", Message: "Inputs가 없습니다 — 전체 삭제 의도가 맞는지 확인하세요", Level: "WARNING",
 				})
 			}
 
@@ -174,10 +174,13 @@ func validateVariableFlow(sf parser.ServiceFunc) []ValidationError {
 			}
 		}
 
-		// @state/@auth Inputs value 검증
+		// Inputs value 검증
 		for _, val := range seq.Inputs {
+			if strings.HasPrefix(val, `"`) {
+				continue // 리터럴
+			}
 			ref := rootVar(val)
-			if ref != "request" && ref != "currentUser" && ref != "" && !declared[ref] {
+			if ref != "request" && ref != "currentUser" && ref != "query" && ref != "config" && ref != "" && !declared[ref] {
 				errs = append(errs, ctx.err("@"+seq.Type, fmt.Sprintf("%q 변수가 아직 선언되지 않았습니다", ref)))
 			}
 		}
@@ -388,8 +391,8 @@ func validateQueryUsage(sf parser.ServiceFunc, st *SymbolTable) []ValidationErro
 
 	specHasQuery := false
 	for _, seq := range sf.Sequences {
-		for _, a := range seq.Args {
-			if a.Source == "query" {
+		for _, val := range seq.Inputs {
+			if val == "query" {
 				specHasQuery = true
 				break
 			}

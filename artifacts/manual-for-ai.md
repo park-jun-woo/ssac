@@ -19,30 +19,34 @@ Go 1.24+, `go/ast` (parsing), `text/template` (codegen), `gopkg.in/yaml.v3` (Ope
 ### CRUD — Model Operations
 
 ```go
-// @get Type var = Model.Method(args...)        — Query (result required)
-// @post Type var = Model.Method(args...)       — Create (result required)
-// @put Model.Method(args...)                   — Update (no result)
-// @delete Model.Method(args...)                — Delete (no result)
+// @get Type var = Model.Method({Key: value, ...})        — Query (result required)
+// @post Type var = Model.Method({Key: value, ...})       — Create (result required)
+// @put Model.Method({Key: value, ...})                   — Update (no result)
+// @delete Model.Method({Key: value, ...})                — Delete (no result)
 ```
 
-Args format: `source.Field` or `"literal"`
+All sequence types use unified `{Key: value}` syntax for args (CRUD, @call, @state, @auth).
+
+Value format: `source.Field` or `"literal"`
 - `request.CourseID` — from HTTP request (reserved source)
 - `course.InstructorID` — from previous result variable
 - `currentUser.ID` — from auth context (reserved source)
 - `config.APIKey` — from environment config (reserved source)
-- `query` — QueryOpts (pagination/sort/filter), explicit in args (reserved source)
+- `query` — QueryOpts (pagination/sort/filter), explicit in inputs (reserved source)
 - `"cancelled"` — string literal
 
 Reserved sources: `request`, `currentUser`, `config`, `query` — cannot be used as result variable names.
+
+Parser IR: all sequence types use `seq.Inputs` (map[string]string). CRUD uses `seq.Inputs` not `seq.Args`.
 
 Required elements per type:
 
 | Type | Required |
 |---|---|
-| get | Model, Result (Args optional) |
-| post | Model, Result, Args |
-| put | Model, Args |
-| delete | Model, Args (0-arg WARNING, `@delete!` suppresses) |
+| get | Model, Result (Inputs optional) |
+| post | Model, Result, Inputs |
+| put | Model, Inputs |
+| delete | Model, Inputs (0-input WARNING, `@delete!` suppresses) |
 | empty, exists | Target, Message |
 | state | DiagramID, Inputs, Transition, Message |
 | auth | Action, Resource, Message |
@@ -89,8 +93,8 @@ Target: variable (`course`) or variable.field (`course.InstructorID`)
 ### Call — External Function
 
 ```go
-// @call Type var = package.Func(args...)       — With result
-// @call package.Func(args...)                  — Without result (guard-style error)
+// @call Type var = package.Func({Key: value, ...})       — With result
+// @call package.Func({Key: value, ...})                  — Without result (guard-style error)
 ```
 
 - Package name from Go import declarations in spec file
@@ -118,12 +122,12 @@ package service
 import "myapp/auth"
 
 // @auth "cancel" "reservation" {id: request.ReservationID} "권한 없음"
-// @get Reservation reservation = Reservation.FindByID(request.ReservationID)
+// @get Reservation reservation = Reservation.FindByID({reservationID: request.ReservationID})
 // @empty reservation "예약을 찾을 수 없습니다"
 // @state reservation {status: reservation.Status} "cancel" "취소할 수 없습니다"
-// @call Refund refund = billing.CalculateRefund(reservation.ID, reservation.StartAt, reservation.EndAt)
-// @put Reservation.UpdateStatus(request.ReservationID, "cancelled")
-// @get Reservation reservation = Reservation.FindByID(request.ReservationID)
+// @call Refund refund = billing.CalculateRefund({id: reservation.ID, startAt: reservation.StartAt, endAt: reservation.EndAt})
+// @put Reservation.UpdateStatus({reservationID: request.ReservationID, status: "cancelled"})
+// @get Reservation reservation = Reservation.FindByID({reservationID: request.ReservationID})
 // @response {
 //   reservation: reservation,
 //   refund: refund
@@ -190,12 +194,12 @@ Additional features when symbol table (external SSOT) is available:
 - **Query cross-validation**: OpenAPI x-extensions ↔ SSaC `query` mismatch detection (ERROR/WARNING)
 - **Model interface derivation**: 3 SSOT sources → `<outDir>/model/models_gen.go`
   - sqlc: method names, cardinality (:one→`*T`, :many→`[]T`, :exec→`error`)
-  - SSaC: all args included (request, currentUser, variable refs, literals→DDL reverse-mapping, query→`opts QueryOpts`)
+  - SSaC: all inputs included (request, currentUser, variable refs, literals→DDL reverse-mapping, query→`opts QueryOpts`)
   - OpenAPI x-: infrastructure params validated against SSaC `query` usage
 - **Domain folder structure**: `service/<domain>/*.go` required (flat service/*.go is ERROR). `service/auth/login.go` → `Domain="auth"` → `outDir/auth/login.go`, `package auth`
 - **@state codegen**: `@state {id} {inputs} "transition"` → `err := {id}state.CanTransition({id}state.Input{...}, "transition")` (error return), import `"states/{id}state"`
 - **@auth codegen**: `@auth "action" "resource" {inputs}` → `authz.Check(currentUser, "action", "resource", authz.Input{...})`
-- **@call codegen**: `@call pkg.Func(args)` → `pkg.Func(pkg.FuncRequest{FieldName: value, ...})` (named fields). No result → `_, err` guard-style (401), with result → value-style (500)
+- **@call codegen**: `@call pkg.Func({Key: value})` → `pkg.Func(pkg.FuncRequest{Key: value, ...})`. No result → `_, err` guard-style (401), with result → value-style (500)
 - **Spec file imports**: Parser collects Go import declarations from spec files and passes them to generated code
 
 Singularization rules (sqlc filename → model name): `ies`→`y`, `sses`→`ss`, `xes`→`x`, otherwise remove trailing `s`
@@ -223,7 +227,7 @@ Infrastructure parameters declared in OpenAPI x- extensions. SSaC specs only dec
 ```
 
 Codegen effects:
-- SSaC spec must explicitly include `query` in args: `Model.List(args..., query)`
+- SSaC spec must explicitly include `query` in inputs: `Model.List({..., query: query})`
 - Model methods with `query` arg get `opts QueryOpts` parameter
 - `query` arg + `[]Type` result → return type includes total count: `([]T, int, error)`
 - `QueryOpts` struct auto-generated (Limit, Offset, Cursor, SortCol, SortDir, Filters)

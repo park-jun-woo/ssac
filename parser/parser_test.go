@@ -10,7 +10,7 @@ import (
 func TestParseGet(t *testing.T) {
 	src := `package service
 
-// @get Course course = Course.FindByID(request.CourseID)
+// @get Course course = Course.FindByID({CourseID: request.CourseID})
 func GetCourse(c *gin.Context) {}
 `
 	sfs := parseTestFile(t, src)
@@ -25,35 +25,32 @@ func GetCourse(c *gin.Context) {}
 	}
 	assertEqual(t, "Result.Type", seq.Result.Type, "Course")
 	assertEqual(t, "Result.Var", seq.Result.Var, "course")
-	if len(seq.Args) != 1 {
-		t.Fatalf("expected 1 arg, got %d", len(seq.Args))
+	if len(seq.Inputs) != 1 {
+		t.Fatalf("expected 1 input, got %d", len(seq.Inputs))
 	}
-	assertEqual(t, "Arg.Source", seq.Args[0].Source, "request")
-	assertEqual(t, "Arg.Field", seq.Args[0].Field, "CourseID")
+	assertEqual(t, "Inputs.CourseID", seq.Inputs["CourseID"], "request.CourseID")
 }
 
 func TestParseGetMultiArgs(t *testing.T) {
 	src := `package service
 
-// @get []Reservation reservations = Reservation.ListByUserAndRoom(currentUser.ID, request.RoomID)
+// @get []Reservation reservations = Reservation.ListByUserAndRoom({UserID: currentUser.ID, RoomID: request.RoomID})
 func ListReservations(c *gin.Context) {}
 `
 	sfs := parseTestFile(t, src)
 	seq := sfs[0].Sequences[0]
 	assertEqual(t, "Result.Type", seq.Result.Type, "[]Reservation")
-	if len(seq.Args) != 2 {
-		t.Fatalf("expected 2 args, got %d", len(seq.Args))
+	if len(seq.Inputs) != 2 {
+		t.Fatalf("expected 2 inputs, got %d", len(seq.Inputs))
 	}
-	assertEqual(t, "Arg0.Source", seq.Args[0].Source, "currentUser")
-	assertEqual(t, "Arg0.Field", seq.Args[0].Field, "ID")
-	assertEqual(t, "Arg1.Source", seq.Args[1].Source, "request")
-	assertEqual(t, "Arg1.Field", seq.Args[1].Field, "RoomID")
+	assertEqual(t, "Inputs.UserID", seq.Inputs["UserID"], "currentUser.ID")
+	assertEqual(t, "Inputs.RoomID", seq.Inputs["RoomID"], "request.RoomID")
 }
 
 func TestParsePost(t *testing.T) {
 	src := `package service
 
-// @post Session session = Session.Create(request.ProjectID, request.Command)
+// @post Session session = Session.Create({ProjectID: request.ProjectID, Command: request.Command})
 func CreateSession(c *gin.Context) {}
 `
 	sfs := parseTestFile(t, src)
@@ -61,15 +58,15 @@ func CreateSession(c *gin.Context) {}
 	assertEqual(t, "Type", seq.Type, SeqPost)
 	assertEqual(t, "Result.Type", seq.Result.Type, "Session")
 	assertEqual(t, "Result.Var", seq.Result.Var, "session")
-	if len(seq.Args) != 2 {
-		t.Fatalf("expected 2 args, got %d", len(seq.Args))
+	if len(seq.Inputs) != 2 {
+		t.Fatalf("expected 2 inputs, got %d", len(seq.Inputs))
 	}
 }
 
 func TestParsePut(t *testing.T) {
 	src := `package service
 
-// @put Course.Update(request.Title, course.ID)
+// @put Course.Update({Title: request.Title, ID: course.ID})
 func UpdateCourse(c *gin.Context) {}
 `
 	sfs := parseTestFile(t, src)
@@ -79,17 +76,16 @@ func UpdateCourse(c *gin.Context) {}
 	if seq.Result != nil {
 		t.Fatal("expected no result for @put")
 	}
-	if len(seq.Args) != 2 {
-		t.Fatalf("expected 2 args, got %d", len(seq.Args))
+	if len(seq.Inputs) != 2 {
+		t.Fatalf("expected 2 inputs, got %d", len(seq.Inputs))
 	}
-	assertEqual(t, "Arg1.Source", seq.Args[1].Source, "course")
-	assertEqual(t, "Arg1.Field", seq.Args[1].Field, "ID")
+	assertEqual(t, "Inputs.ID", seq.Inputs["ID"], "course.ID")
 }
 
 func TestParseDelete(t *testing.T) {
 	src := `package service
 
-// @delete Reservation.Cancel(reservation.ID)
+// @delete Reservation.Cancel({ID: reservation.ID})
 func CancelReservation(c *gin.Context) {}
 `
 	sfs := parseTestFile(t, src)
@@ -98,18 +94,18 @@ func CancelReservation(c *gin.Context) {}
 	if seq.Result != nil {
 		t.Fatal("expected no result for @delete")
 	}
+	assertEqual(t, "Inputs.ID", seq.Inputs["ID"], "reservation.ID")
 }
 
 func TestParseLiteralArg(t *testing.T) {
 	src := `package service
 
-// @put Reservation.UpdateStatus(request.ReservationID, "cancelled")
+// @put Reservation.UpdateStatus({ReservationID: request.ReservationID, Status: "cancelled"})
 func CancelReservation(c *gin.Context) {}
 `
 	sfs := parseTestFile(t, src)
 	seq := sfs[0].Sequences[0]
-	assertEqual(t, "Arg1.Literal", seq.Args[1].Literal, "cancelled")
-	assertEqual(t, "Arg1.Source", seq.Args[1].Source, "")
+	assertEqual(t, "Inputs.Status", seq.Inputs["Status"], `"cancelled"`)
 }
 
 func TestParseEmpty(t *testing.T) {
@@ -256,8 +252,8 @@ func CancelReservation(c *gin.Context) {}
 func TestParseResponse(t *testing.T) {
 	src := `package service
 
-// @get Course course = Course.FindByID(request.CourseID)
-// @get User instructor = User.FindByID(course.InstructorID)
+// @get Course course = Course.FindByID({CourseID: request.CourseID})
+// @get User instructor = User.FindByID({InstructorID: course.InstructorID})
 // @response {
 //   course: course,
 //   instructor_name: instructor.Name,
@@ -284,7 +280,7 @@ func TestParseImports(t *testing.T) {
 
 import "myapp/auth"
 
-// @get User user = User.FindByEmail(request.Email)
+// @get User user = User.FindByEmail({Email: request.Email})
 func Login(c *gin.Context) {}
 `
 	sfs := parseTestFile(t, src)
@@ -302,7 +298,7 @@ import (
 	"myapp/billing"
 )
 
-// @get User user = User.FindByID(request.UserID)
+// @get User user = User.FindByID({UserID: request.UserID})
 func GetUser(c *gin.Context) {}
 `
 	sfs := parseTestFile(t, src)
@@ -317,7 +313,7 @@ func TestParseFlatServiceError(t *testing.T) {
 
 	src := `package service
 
-// @get User user = User.FindByEmail(request.Email)
+// @get User user = User.FindByEmail({Email: request.Email})
 // @response {
 //   user: user
 // }
@@ -341,7 +337,7 @@ func TestParseDomainFolder(t *testing.T) {
 
 	src := `package service
 
-// @get User user = User.FindByEmail(request.Email)
+// @get User user = User.FindByEmail({Email: request.Email})
 // @response {
 //   user: user
 // }
@@ -365,12 +361,12 @@ func TestParseFullExample(t *testing.T) {
 import "myapp/auth"
 
 // @auth "cancel" "reservation" {id: request.ReservationID} "권한 없음"
-// @get Reservation reservation = Reservation.FindByID(request.ReservationID)
+// @get Reservation reservation = Reservation.FindByID({ReservationID: request.ReservationID})
 // @empty reservation "예약을 찾을 수 없습니다"
 // @state reservation {status: reservation.Status} "cancel" "취소할 수 없습니다"
 // @call Refund refund = billing.CalculateRefund({ID: reservation.ID, StartAt: reservation.StartAt, EndAt: reservation.EndAt})
-// @put Reservation.UpdateStatus(request.ReservationID, "cancelled")
-// @get Reservation reservation = Reservation.FindByID(request.ReservationID)
+// @put Reservation.UpdateStatus({ReservationID: request.ReservationID, Status: "cancelled"})
+// @get Reservation reservation = Reservation.FindByID({ReservationID: request.ReservationID})
 // @response {
 //   reservation: reservation,
 //   refund: refund
@@ -424,13 +420,13 @@ func CancelReservation(c *gin.Context) {}
 func TestParseMultipleFuncs(t *testing.T) {
 	src := `package service
 
-// @get Course course = Course.FindByID(request.CourseID)
+// @get Course course = Course.FindByID({CourseID: request.CourseID})
 // @response {
 //   course: course
 // }
 func GetCourse(c *gin.Context) {}
 
-// @post Course course = Course.Create(request.Title)
+// @post Course course = Course.Create({Title: request.Title})
 // @response {
 //   course: course
 // }
@@ -464,7 +460,7 @@ func DeleteAll() {}
 func TestParseSuppressWarnGet(t *testing.T) {
 	src := `package service
 
-// @get! Course course = Course.FindByID(request.CourseID)
+// @get! Course course = Course.FindByID({CourseID: request.CourseID})
 func GetCourse() {}
 `
 	sfs := parseTestFile(t, src)
@@ -479,7 +475,7 @@ func GetCourse() {}
 func TestParseNoSuppressWarn(t *testing.T) {
 	src := `package service
 
-// @get Course course = Course.FindByID(request.CourseID)
+// @get Course course = Course.FindByID({CourseID: request.CourseID})
 func GetCourse() {}
 `
 	sfs := parseTestFile(t, src)
@@ -492,7 +488,7 @@ func GetCourse() {}
 func TestParseSuppressWarnResponse(t *testing.T) {
 	src := `package service
 
-// @get Course course = Course.FindByID(request.ID)
+// @get Course course = Course.FindByID({ID: request.ID})
 // @response! {
 //   course: course,
 // }

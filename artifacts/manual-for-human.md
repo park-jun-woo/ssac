@@ -73,7 +73,7 @@ package service
 
 import "myapp/auth"
 
-// @get Course course = Course.FindByID(request.CourseID)
+// @get Course course = Course.FindByID({courseID: request.CourseID})
 // @empty course "코스를 찾을 수 없습니다"
 // @response {
 //   course: course
@@ -87,9 +87,19 @@ func GetCourse() {}
 - spec 파일의 Go import 선언은 생성 코드에 전달됨
 - `@type!` — `!` 접미사로 해당 시퀀스의 WARNING 억제 (ERROR는 영향 없음)
 
-### 인자(Args) 표기법
+### 인자(Inputs) 표기법
 
-모든 CRUD/call 시퀀스의 인자는 `source.Field` 형식으로 출처를 명시한다.
+모든 시퀀스 타입(CRUD, @call, @state, @auth)에서 `{Key: value}` 통일 문법을 사용한다.
+
+```go
+// @get Course course = Course.FindByID({courseID: request.CourseID})
+// @put Room.Update({roomID: request.RoomID, name: request.Name, capacity: request.Capacity})
+// @call Token token = auth.IssueToken({userID: user.ID})
+// @state reservation {status: reservation.Status} "cancel" "취소할 수 없습니다"
+// @auth "cancel" "reservation" {id: request.ReservationID} "권한 없음"
+```
+
+Value 형식: `source.Field` 또는 `"literal"`
 
 | 표기 | 의미 | 예시 |
 |---|---|---|
@@ -100,6 +110,8 @@ func GetCourse() {}
 | `query` | QueryOpts (페이지네이션/정렬/필터, 예약 소스) | `query` |
 | `"literal"` | 문자열 리터럴 | `"cancelled"` |
 
+파서 IR: 모든 시퀀스 타입이 `seq.Inputs` (map[string]string)을 사용한다. CRUD도 `seq.Args` 대신 `seq.Inputs` 사용.
+
 **예약 소스 (Reserved Sources)**: `request`, `currentUser`, `config`, `query`는 시스템이 사전 정의하는 특수 소스다.
 result 변수명으로 사용하면 validator에서 ERROR가 발생한다.
 
@@ -107,10 +119,10 @@ result 변수명으로 사용하면 validator에서 ERROR가 발생한다.
 
 | 타입 | 필수 |
 |---|---|
-| get | Model, Result (Args 선택) |
-| post | Model, Result, Args |
-| put | Model, Args |
-| delete | Model, Args (0-arg WARNING, `@delete!`로 억제) |
+| get | Model, Result (Inputs 선택) |
+| post | Model, Result, Inputs |
+| put | Model, Inputs |
+| delete | Model, Inputs (0-input WARNING, `@delete!`로 억제) |
 | empty, exists | Target, Message |
 | state | DiagramID, Inputs, Transition, Message |
 | auth | Action, Resource, Message |
@@ -140,13 +152,13 @@ specs/service/
 ### @get — 리소스 조회
 
 ```go
-// @get {Type} {var} = {Model}.{Method}({args...})
+// @get {Type} {var} = {Model}.{Method}({Key: value, ...})
 ```
 
 ```go
-// @get Course course = Course.FindByID(request.CourseID)
-// @get User instructor = User.FindByID(course.InstructorID)
-// @get []Reservation reservations = Reservation.ListByRoom(request.RoomID)
+// @get Course course = Course.FindByID({courseID: request.CourseID})
+// @get User instructor = User.FindByID({userID: course.InstructorID})
+// @get []Reservation reservations = Reservation.ListByRoom({roomID: request.RoomID})
 ```
 
 코드젠:
@@ -161,32 +173,32 @@ if err != nil {
 ### @post — 리소스 생성
 
 ```go
-// @post {Type} {var} = {Model}.{Method}({args...})
+// @post {Type} {var} = {Model}.{Method}({Key: value, ...})
 ```
 
 ```go
-// @post Session session = Session.Create(currentUser.ID)
+// @post Session session = Session.Create({userID: currentUser.ID})
 ```
 
 ### @put — 리소스 수정
 
 ```go
-// @put {Model}.{Method}({args...})
+// @put {Model}.{Method}({Key: value, ...})
 ```
 
 ```go
-// @put Room.Update(request.RoomID, request.Name, request.Capacity)
+// @put Room.Update({roomID: request.RoomID, name: request.Name, capacity: request.Capacity})
 ```
 
 ### @delete — 리소스 삭제
 
 ```go
-// @delete {Model}.{Method}({args...})
+// @delete {Model}.{Method}({Key: value, ...})
 ```
 
 ```go
-// @delete Room.Delete(request.RoomID)
-// @delete! Room.DeleteAll()              — ! 접미사로 0-arg WARNING 억제
+// @delete Room.Delete({roomID: request.RoomID})
+// @delete! Room.DeleteAll({})              — ! 접미사로 0-input WARNING 억제
 ```
 
 ### @empty — null이면 종료 (404)
@@ -292,10 +304,10 @@ if err := authz.Check(currentUser, "cancel", "reservation", authz.Input{
 
 ```go
 // result 있음
-// @call {Type} {var} = {package}.{Func}({args...})
+// @call {Type} {var} = {package}.{Func}({Key: value, ...})
 
 // result 없음
-// @call {package}.{Func}({args...})
+// @call {package}.{Func}({Key: value, ...})
 ```
 
 - spec 파일에 import를 명시해야 한다
@@ -304,11 +316,11 @@ if err := authz.Check(currentUser, "cancel", "reservation", authz.Input{
 
 ```go
 // guard형 (result 없음)
-// @call auth.VerifyPassword(user.PasswordHash, request.Password)
+// @call auth.VerifyPassword({passwordHash: user.PasswordHash, password: request.Password})
 
 // value형 (result 있음)
-// @call Token token = auth.IssueToken(user.ID)
-// @call Refund refund = billing.CalculateRefund(reservation.ID, reservation.StartAt, reservation.EndAt)
+// @call Token token = auth.IssueToken({userID: user.ID})
+// @call Refund refund = billing.CalculateRefund({id: reservation.ID, startAt: reservation.StartAt, endAt: reservation.EndAt})
 ```
 
 코드젠 (guard형):
@@ -508,11 +520,11 @@ x-include:
 SSaC spec에서 `query` 예약 소스를 명시적으로 사용해야 한다:
 
 ```go
-// @get []Reservation reservations = Reservation.ListByUserID(currentUser.ID, query)
+// @get []Reservation reservations = Reservation.ListByUserID({userID: currentUser.ID, query: query})
 ```
 
 코드젠 효과:
-- SSaC에 `query` 인자가 있는 메서드에만 `opts QueryOpts` 파라미터 추가 (암묵적 삽입 없음)
+- SSaC에 `query` 입력이 있는 메서드에만 `opts QueryOpts` 파라미터 추가 (암묵적 삽입 없음)
 - `query` + `[]Type` 결과 → 반환 타입: `([]T, int, error)` (total count 포함)
 - `QueryOpts` struct 자동 생성 (Limit, Offset, Cursor, SortCol, SortDir, Filters)
 
@@ -527,7 +539,7 @@ SSaC spec에서 `query` 예약 소스를 명시적으로 사용해야 한다:
 `ssac gen`에서 심볼 테이블이 있으면 3가지 SSOT를 교차하여 `<outDir>/model/models_gen.go`에 생성한다.
 
 - **sqlc**: 메서드명 + 카디널리티 (`:one`→포인터, `:many`→슬라이스, `:exec`→error)
-- **SSaC**: 모든 인자 포함 (request, currentUser, 변수 참조, 리터럴 DDL 역매핑)
+- **SSaC**: 모든 입력 포함 (request, currentUser, 변수 참조, 리터럴 DDL 역매핑)
 - **OpenAPI x-**: 인프라 파라미터 (`opts QueryOpts` 추가)
 
 생성 예시:
@@ -571,7 +583,7 @@ WARNING 예시: put/delete 후 갱신 없이 response에서 이전 변수를 사
 모든 시퀀스 타입에 `!` 접미사를 붙이면 해당 시퀀스의 WARNING을 억제한다. ERROR는 영향 없음.
 
 ```go
-// @delete! Room.DeleteAll()              — 0-arg 전체 삭제 WARNING 억제
+// @delete! Room.DeleteAll({})            — 0-input 전체 삭제 WARNING 억제
 // @response! { room: room }              — stale 데이터 WARNING 억제
 ```
 
@@ -588,12 +600,12 @@ package reservation
 import "myapp/billing"
 
 // @auth "cancel" "reservation" {id: request.ReservationID} "권한 없음"
-// @get Reservation reservation = Reservation.FindByID(request.ReservationID)
+// @get Reservation reservation = Reservation.FindByID({reservationID: request.ReservationID})
 // @empty reservation "예약을 찾을 수 없습니다"
 // @state reservation {status: reservation.Status} "cancel" "취소할 수 없습니다"
-// @call Refund refund = billing.CalculateRefund(reservation.ID, reservation.StartAt, reservation.EndAt)
-// @put Reservation.UpdateStatus(request.ReservationID, "cancelled")
-// @get Reservation reservation = Reservation.FindByID(request.ReservationID)
+// @call Refund refund = billing.CalculateRefund({id: reservation.ID, startAt: reservation.StartAt, endAt: reservation.EndAt})
+// @put Reservation.UpdateStatus({reservationID: request.ReservationID, status: "cancelled"})
+// @get Reservation reservation = Reservation.FindByID({reservationID: request.ReservationID})
 // @response {
 //   reservation: reservation,
 //   refund: refund

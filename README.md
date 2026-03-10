@@ -18,9 +18,9 @@ Every service function is a sequence of steps. Each step follows a binary contra
 No LLM, no inference — pure symbolic codegen from templates. The spec is the source of truth.
 
 ```go
-// @get Project project = Project.FindByID(request.ProjectID)
+// @get Project project = Project.FindByID({projectID: request.ProjectID})
 // @empty project "project not found"
-// @post Session session = Session.Create(request.ProjectID, request.Command)
+// @post Session session = Session.Create({projectID: request.ProjectID, command: request.Command})
 // @response {
 //   session: session
 // }
@@ -69,18 +69,18 @@ func CreateSession(c *gin.Context) {
 
 | Type | Syntax | Role |
 |---|---|---|
-| `get` | `@get Type var = Model.Method(args)` | Resource lookup (result required) |
-| `post` | `@post Type var = Model.Method(args)` | Resource creation (result required) |
-| `put` | `@put Model.Method(args)` | Resource update |
-| `delete` | `@delete Model.Method(args)` | Resource deletion |
+| `get` | `@get Type var = Model.Method({Key: value})` | Resource lookup (result required) |
+| `post` | `@post Type var = Model.Method({Key: value})` | Resource creation (result required) |
+| `put` | `@put Model.Method({Key: value})` | Resource update |
+| `delete` | `@delete Model.Method({Key: value})` | Resource deletion |
 | `empty` | `@empty target "message"` | Exit if nil/zero (404) |
 | `exists` | `@exists target "message"` | Exit if exists (409) |
 | `state` | `@state id {inputs} "transition" "msg"` | State transition check (409) |
 | `auth` | `@auth "action" "resource" {inputs} "msg"` | Permission check (403) |
-| `call` | `@call [Type var =] pkg.Func(args)` | External function call |
+| `call` | `@call [Type var =] pkg.Func({Key: value})` | External function call |
 | `response` | `@response { field: var }` | Return response (multi-line block) |
 
-Args format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`), `query` (QueryOpts), or `"literal"`.
+All sequence types use unified `{Key: value}` syntax. Value format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`), `query` (QueryOpts), or `"literal"`.
 
 Reserved sources (`request`, `currentUser`, `config`, `query`) cannot be used as result variable names. Append `!` to any type to suppress WARNINGs (e.g. `@delete!`, `@response!`).
 
@@ -106,7 +106,7 @@ External SSOT cross-validation (when project structure detected):
 - Request/response field matching (OpenAPI, forward + reverse)
 - Stale data warning: put/delete followed by response without re-fetch (WARNING level, suppressed by `@response!`)
 - Reserved source conflict: result variable named `request`/`currentUser`/`config` (ERROR)
-- @delete 0-arg warning: delete with no arguments (WARNING, suppressed by `@delete!`)
+- @delete 0-input warning: delete with no inputs (WARNING, suppressed by `@delete!`)
 
 ```bash
 ssac validate specs/dummy-study      # With external validation
@@ -132,10 +132,10 @@ When external SSOT (symbol table) is available, `ssac gen` adds:
 - **Query cross-validation**: OpenAPI x-extensions ↔ SSaC `query` mismatch detection (ERROR/WARNING)
 - **Model interface derivation**: Crosses 3 SSOT sources → `<outDir>/model/models_gen.go`
   - sqlc: method names + cardinality (`:one`→`*T`, `:many`→`[]T`, `:exec`→`error`)
-  - SSaC: all args included (request, currentUser, variable refs, literals→DDL reverse-mapping, query→`opts QueryOpts`)
+  - SSaC: all inputs included (request, currentUser, variable refs, literals→DDL reverse-mapping, query→`opts QueryOpts`)
   - OpenAPI x-extensions: validated against SSaC `query` usage
 - **Domain folder structure**: `service/<domain>/*.go` required (flat service/*.go is ERROR). `service/auth/login.go` → outputs to `outDir/auth/login.go` with `package auth`
-- **@call codegen**: `pkg.Func(pkg.FuncRequest{FieldName: value, ...})` (named fields). No result → `_, err` guard-style (401), with result → value-style (500)
+- **@call codegen**: `pkg.Func(pkg.FuncRequest{Key: value, ...})`. No result → `_, err` guard-style (401), with result → value-style (500)
 - **@state codegen**: `err := {id}state.CanTransition({id}state.Input{...}, "transition")` (returns error, not bool)
 - **@auth codegen**: `authz.Check(currentUser, "action", "resource", authz.Input{...})`
 - **Spec file imports**: Go import declarations in spec files are passed to generated code

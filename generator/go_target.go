@@ -210,11 +210,17 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 		d.Message = defaultMessage(seq)
 	}
 
-	// Args → code
-	d.ArgsCode = buildArgsCode(seq.Args)
+	// Args/Inputs → code
+	switch seq.Type {
+	case parser.SeqGet, parser.SeqPost, parser.SeqPut, parser.SeqDelete:
+		// CRUD: Inputs value만 positional로 변환
+		d.ArgsCode = buildArgsCodeFromInputs(seq.Inputs)
+	default:
+		d.ArgsCode = buildArgsCode(seq.Args)
+	}
 
 	// query arg → HasTotal (List + query → 3-tuple return)
-	if hasQueryArg(seq.Args) && seq.Result != nil && strings.HasPrefix(seq.Result.Type, "[]") {
+	if hasQueryInput(seq.Inputs) && seq.Result != nil && strings.HasPrefix(seq.Result.Type, "[]") {
 		d.HasTotal = true
 	}
 
@@ -234,8 +240,10 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 	d.Resource = seq.Resource
 
 	// Inputs → InputFields (for state, auth, call)
-	if len(seq.Inputs) > 0 {
-		d.InputFields = buildInputFieldsFromMap(seq.Inputs)
+	if seq.Type == parser.SeqState || seq.Type == parser.SeqAuth || seq.Type == parser.SeqCall {
+		if len(seq.Inputs) > 0 {
+			d.InputFields = buildInputFieldsFromMap(seq.Inputs)
+		}
 	}
 
 	// Response
@@ -338,11 +346,42 @@ func buildInputFieldsFromMap(inputs map[string]string) string {
 
 // inputValueToCode는 inputs 값에 argToCode와 동일한 예약 소스 변환을 적용한다.
 func inputValueToCode(val string) string {
+	if val == "query" {
+		return "opts"
+	}
 	if strings.HasPrefix(val, "request.") {
 		return lcFirst(val[len("request."):])
 	}
 	// currentUser.Field, config.Field, 일반 변수 → 그대로
 	return val
+}
+
+// buildArgsCodeFromInputs는 Inputs map의 value만 추출하여 positional 함수 인자로 변환한다.
+func buildArgsCodeFromInputs(inputs map[string]string) string {
+	if len(inputs) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(inputs))
+	for k := range inputs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var parts []string
+	for _, k := range keys {
+		parts = append(parts, inputValueToCode(inputs[k]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// hasQueryInput은 Inputs map에 query 예약 소스가 있는지 확인한다.
+func hasQueryInput(inputs map[string]string) bool {
+	for _, v := range inputs {
+		if v == "query" {
+			return true
+		}
+	}
+	return false
 }
 
 
@@ -595,10 +634,8 @@ func needsCurrentUser(seqs []parser.Sequence) bool {
 
 func needsQueryOpts(sf parser.ServiceFunc, st *validator.SymbolTable) bool {
 	for _, seq := range sf.Sequences {
-		for _, a := range seq.Args {
-			if a.Source == "query" {
-				return true
-			}
+		if hasQueryInput(seq.Inputs) {
+			return true
 		}
 	}
 	return false
@@ -689,15 +726,6 @@ func zeroValueChecks(typeName string) (zeroCheck, existsCheck string) {
 	}
 }
 
-func hasQueryArg(args []parser.Arg) bool {
-	for _, a := range args {
-		if a.Source == "query" {
-			return true
-		}
-	}
-	return false
-}
-
 func hasConversionErr(params []typedRequestParam) bool {
 	for _, p := range params {
 		if p.goType != "string" && p.goType != "json_body" {
@@ -719,7 +747,7 @@ func rootVar(s string) string {
 type modelUsage struct {
 	ModelName  string
 	MethodName string
-	Args       []parser.Arg
+	Inputs     map[string]string
 	Result     *parser.Result
 	FuncName   string
 }
@@ -738,7 +766,7 @@ func collectModelUsages(funcs []parser.ServiceFunc) []modelUsage {
 			usages = append(usages, modelUsage{
 				ModelName:  parts[0],
 				MethodName: parts[1],
-				Args:       seq.Args,
+				Inputs:     seq.Inputs,
 				Result:     seq.Result,
 				FuncName:   sf.Name,
 			})
@@ -817,14 +845,21 @@ func deriveInterfaces(usages []modelUsage, st *validator.SymbolTable) []derivedI
 
 			dm := derivedMethod{Name: methodName}
 
-			for _, a := range usage.Args {
-				if a.Source == "query" {
+			inputKeys := make([]string, 0, len(usage.Inputs))
+			for k := range usage.Inputs {
+				inputKeys = append(inputKeys, k)
+			}
+			sort.Strings(inputKeys)
+
+			for _, k := range inputKeys {
+				val := usage.Inputs[k]
+				if val == "query" {
 					dm.HasQueryOpts = true
 					continue
 				}
 				dp := derivedParam{
-					Name:   resolveArgParamName(a),
-					GoType: resolveArgParamType(a, usage.ModelName, st),
+					Name:   lcFirst(k),
+					GoType: resolveInputParamType(val, usage.ModelName, st),
 				}
 				if dp.Name != "" {
 					dm.Params = append(dm.Params, dp)
@@ -885,6 +920,63 @@ func resolveArgParamType(a parser.Arg, modelName string, st *validator.SymbolTab
 	// {Model}ID 패턴
 	if strings.HasSuffix(a.Field, "ID") {
 		refModel := a.Field[:len(a.Field)-2]
+		refTable := toSnakeCase(refModel) + "s"
+		if table, ok := st.DDLTables[refTable]; ok {
+			if goType, ok := table.Columns["id"]; ok {
+				return goType
+			}
+		}
+	}
+
+	// 전체 순회
+	for _, table := range st.DDLTables {
+		if goType, ok := table.Columns[snakeName]; ok {
+			return goType
+		}
+	}
+
+	return "string"
+}
+
+// resolveInputParamType는 Inputs value에서 Go 타입을 추론한다.
+// value 형식: "request.Field", "source.Field", "\"literal\"", "currentUser.Field"
+func resolveInputParamType(val string, modelName string, st *validator.SymbolTable) string {
+	// 리터럴
+	if strings.HasPrefix(val, `"`) {
+		return "string"
+	}
+
+	dotIdx := strings.IndexByte(val, '.')
+	if dotIdx < 0 {
+		return "string"
+	}
+	source := val[:dotIdx]
+	field := val[dotIdx+1:]
+
+	// source.Field → source 테이블의 field 컬럼 조회
+	if source != "request" && source != "currentUser" {
+		refTable := toSnakeCase(source) + "s"
+		refCol := toSnakeCase(field)
+		if table, ok := st.DDLTables[refTable]; ok {
+			if goType, ok := table.Columns[refCol]; ok {
+				return goType
+			}
+		}
+	}
+
+	snakeName := toSnakeCase(field)
+
+	// 해당 모델 테이블
+	tableName := toSnakeCase(modelName) + "s"
+	if table, ok := st.DDLTables[tableName]; ok {
+		if goType, ok := table.Columns[snakeName]; ok {
+			return goType
+		}
+	}
+
+	// {Model}ID 패턴
+	if strings.HasSuffix(field, "ID") {
+		refModel := field[:len(field)-2]
 		refTable := toSnakeCase(refModel) + "s"
 		if table, ok := st.DDLTables[refTable]; ok {
 			if goType, ok := table.Columns["id"]; ok {

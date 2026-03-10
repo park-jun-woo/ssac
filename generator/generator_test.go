@@ -13,7 +13,7 @@ func TestGenerateGet(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "CourseID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"CourseID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
 	}
@@ -27,12 +27,12 @@ func TestGeneratePost(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "CreateSession", FileName: "create_session.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqPost, Model: "Session.Create", Args: []parser.Arg{{Source: "request", Field: "ProjectID"}, {Source: "request", Field: "Command"}}, Result: &parser.Result{Type: "Session", Var: "session"}},
+			{Type: parser.SeqPost, Model: "Session.Create", Inputs: map[string]string{"ProjectID": "request.ProjectID", "Command": "request.Command"}, Result: &parser.Result{Type: "Session", Var: "session"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"session": "session"}},
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	assertContains(t, code, `session, err := sessionModel.Create(projectID, command)`)
+	assertContains(t, code, `session, err := sessionModel.Create(command, projectID)`)
 	assertContains(t, code, `"session": session`)
 }
 
@@ -40,19 +40,19 @@ func TestGeneratePut(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "UpdateCourse", FileName: "update_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqPut, Model: "Course.Update", Args: []parser.Arg{{Source: "request", Field: "Title"}, {Source: "course", Field: "ID"}}},
+			{Type: parser.SeqPut, Model: "Course.Update", Inputs: map[string]string{"Title": "request.Title", "ID": "course.ID"}},
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	assertContains(t, code, `err := courseModel.Update(title, course.ID)`)
+	assertContains(t, code, `err := courseModel.Update(course.ID, title)`)
 }
 
 func TestGenerateDelete(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "CancelReservation", FileName: "cancel_reservation.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
-			{Type: parser.SeqDelete, Model: "Reservation.Cancel", Args: []parser.Arg{{Source: "reservation", Field: "ID"}}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqDelete, Model: "Reservation.Cancel", Inputs: map[string]string{"ID": "reservation.ID"}},
 		},
 	}
 	code := mustGenerate(t, sf, nil)
@@ -63,7 +63,7 @@ func TestGenerateEmpty(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqEmpty, Target: "course", Message: "코스를 찾을 수 없습니다"},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
@@ -77,7 +77,7 @@ func TestGenerateExists(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "CreateCourse", FileName: "create_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByTitle", Args: []parser.Arg{{Source: "request", Field: "Title"}}, Result: &parser.Result{Type: "Course", Var: "existing"}},
+			{Type: parser.SeqGet, Model: "Course.FindByTitle", Inputs: map[string]string{"Title": "request.Title"}, Result: &parser.Result{Type: "Course", Var: "existing"}},
 			{Type: parser.SeqExists, Target: "existing", Message: "이미 존재합니다"},
 		},
 	}
@@ -90,7 +90,7 @@ func TestGenerateState(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "CancelReservation", FileName: "cancel_reservation.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
 			{Type: parser.SeqState, DiagramID: "reservation", Inputs: map[string]string{"status": "reservation.Status"}, Transition: "cancel", Message: "취소할 수 없습니다"},
 		},
 	}
@@ -121,7 +121,7 @@ func TestGenerateCallWithResult(t *testing.T) {
 		Name: "Login", FileName: "login.go",
 		Imports: []string{"myapp/auth"},
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "User.FindByEmail", Args: []parser.Arg{{Source: "request", Field: "Email"}}, Result: &parser.Result{Type: "User", Var: "user"}},
+			{Type: parser.SeqGet, Model: "User.FindByEmail", Inputs: map[string]string{"Email": "request.Email"}, Result: &parser.Result{Type: "User", Var: "user"}},
 			{Type: parser.SeqCall, Model: "auth.VerifyPassword", Inputs: map[string]string{"Email": "user.Email", "Password": "request.Password"}, Result: &parser.Result{Type: "Token", Var: "token"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"token": "token"}},
 		},
@@ -154,7 +154,7 @@ func TestGenerateCallBareVariable(t *testing.T) {
 		Imports: []string{"myapp/auth"},
 		Sequences: []parser.Sequence{
 			{Type: parser.SeqCall, Model: "auth.HashPassword", Inputs: map[string]string{"Password": "request.Password"}, Result: &parser.Result{Type: "string", Var: "hashedPassword"}},
-			{Type: parser.SeqPost, Model: "User.Create", Args: []parser.Arg{{Source: "request", Field: "Email"}, {Source: "hashedPassword"}, {Source: "request", Field: "Role"}}, Result: &parser.Result{Type: "User", Var: "user"}},
+			{Type: parser.SeqPost, Model: "User.Create", Inputs: map[string]string{"Email": "request.Email", "HashedPassword": "hashedPassword", "Role": "request.Role"}, Result: &parser.Result{Type: "User", Var: "user"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"user": "user"}},
 		},
 	}
@@ -170,8 +170,8 @@ func TestGenerateResponse(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
-			{Type: parser.SeqGet, Model: "User.FindByID", Args: []parser.Arg{{Source: "course", Field: "InstructorID"}}, Result: &parser.Result{Type: "User", Var: "instructor"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "User.FindByID", Inputs: map[string]string{"InstructorID": "course.InstructorID"}, Result: &parser.Result{Type: "User", Var: "instructor"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course", "instructor_name": "instructor.Name"}},
 		},
 	}
@@ -185,7 +185,7 @@ func TestGenerateCurrentUser(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "ListMy", FileName: "list_my.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Item.ListByUser", Args: []parser.Arg{{Source: "currentUser", Field: "ID"}}, Result: &parser.Result{Type: "[]Item", Var: "items"}},
+			{Type: parser.SeqGet, Model: "Item.ListByUser", Inputs: map[string]string{"ID": "currentUser.ID"}, Result: &parser.Result{Type: "[]Item", Var: "items"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"items": "items"}},
 		},
 	}
@@ -207,13 +207,13 @@ func TestGenerateQueryArg(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "ListMyReservations", FileName: "list_my_reservations.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Reservation.ListByUserID", Args: []parser.Arg{{Source: "currentUser", Field: "ID"}, {Source: "query"}}, Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
+			{Type: parser.SeqGet, Model: "Reservation.ListByUserID", Inputs: map[string]string{"UserID": "currentUser.ID", "Opts": "query"}, Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"reservations": "reservations"}},
 		},
 	}
 	code := mustGenerate(t, sf, st)
 	assertContains(t, code, `opts := QueryOpts{}`)
-	assertContains(t, code, `reservationModel.ListByUserID(currentUser.ID, opts)`)
+	assertContains(t, code, `reservationModel.ListByUserID(opts, currentUser.ID)`)
 	assertContains(t, code, `reservations, total, err`)
 	assertContains(t, code, `"total":`)
 }
@@ -233,7 +233,7 @@ func TestGenerateWithPathParam(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "CourseID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"CourseID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
 	}
@@ -253,7 +253,7 @@ func TestGenerateWithJSONBody(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "CreateSession", FileName: "create_session.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqPost, Model: "Session.Create", Args: []parser.Arg{{Source: "request", Field: "ProjectID"}, {Source: "request", Field: "Command"}}, Result: &parser.Result{Type: "Session", Var: "session"}},
+			{Type: parser.SeqPost, Model: "Session.Create", Inputs: map[string]string{"ProjectID": "request.ProjectID", "Command": "request.Command"}, Result: &parser.Result{Type: "Session", Var: "session"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"session": "session"}},
 		},
 	}
@@ -266,7 +266,7 @@ func TestGenerateDomainPackage(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "Login", FileName: "login.go", Domain: "auth",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "User.FindByEmail", Args: []parser.Arg{{Source: "request", Field: "Email"}}, Result: &parser.Result{Type: "User", Var: "user"}},
+			{Type: parser.SeqGet, Model: "User.FindByEmail", Inputs: map[string]string{"Email": "request.Email"}, Result: &parser.Result{Type: "User", Var: "user"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"user": "user"}},
 		},
 	}
@@ -280,12 +280,12 @@ func TestGenerateFullExample(t *testing.T) {
 		Imports: []string{"myapp/billing"},
 		Sequences: []parser.Sequence{
 			{Type: parser.SeqAuth, Action: "cancel", Resource: "reservation", Inputs: map[string]string{"id": "request.ReservationID"}, Message: "권한 없음"},
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ReservationID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ReservationID": "request.ReservationID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
 			{Type: parser.SeqEmpty, Target: "reservation", Message: "예약을 찾을 수 없습니다"},
 			{Type: parser.SeqState, DiagramID: "reservation", Inputs: map[string]string{"status": "reservation.Status"}, Transition: "cancel", Message: "취소할 수 없습니다"},
 			{Type: parser.SeqCall, Model: "billing.CalculateRefund", Inputs: map[string]string{"ID": "reservation.ID", "StartAt": "reservation.StartAt", "EndAt": "reservation.EndAt"}, Result: &parser.Result{Type: "Refund", Var: "refund"}},
-			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Args: []parser.Arg{{Source: "request", Field: "ReservationID"}, {Literal: "cancelled"}}},
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ReservationID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Inputs: map[string]string{"ReservationID": "request.ReservationID", "Status": `"cancelled"`}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ReservationID": "request.ReservationID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"reservation": "reservation", "refund": "refund"}},
 		},
 	}
@@ -312,9 +312,9 @@ func TestGenerateReAssign(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "CancelReservation", FileName: "cancel_reservation.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
-			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Args: []parser.Arg{{Source: "request", Field: "ID"}, {Literal: "cancelled"}}},
-			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Inputs: map[string]string{"ID": "request.ID", "Status": `"cancelled"`}},
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"reservation": "reservation"}},
 		},
 	}
@@ -342,7 +342,7 @@ func TestGenerateLiteralArg(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "Cancel", FileName: "cancel.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Args: []parser.Arg{{Source: "request", Field: "ID"}, {Literal: "cancelled"}}},
+			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Inputs: map[string]string{"ID": "request.ID", "Status": `"cancelled"`}},
 		},
 	}
 	code := mustGenerate(t, sf, nil)
@@ -364,7 +364,7 @@ func TestGenerateModelInterface(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "GetCourse", FileName: "get_course.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "CourseID"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"CourseID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
 		},
 	}}
@@ -401,8 +401,8 @@ func TestGenerateModelInterfaceQueryOptsExplicit(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "ListMyReservations", FileName: "list_my_reservations.go",
 		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "User.FindByID", Args: []parser.Arg{{Source: "currentUser", Field: "ID"}}, Result: &parser.Result{Type: "User", Var: "user"}},
-			{Type: parser.SeqGet, Model: "Reservation.ListByUserID", Args: []parser.Arg{{Source: "currentUser", Field: "ID"}, {Source: "query"}}, Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
+			{Type: parser.SeqGet, Model: "User.FindByID", Inputs: map[string]string{"ID": "currentUser.ID"}, Result: &parser.Result{Type: "User", Var: "user"}},
+			{Type: parser.SeqGet, Model: "Reservation.ListByUserID", Inputs: map[string]string{"UserID": "currentUser.ID", "Opts": "query"}, Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"reservations": "reservations"}},
 		},
 	}}
@@ -417,7 +417,7 @@ func TestGenerateModelInterfaceQueryOptsExplicit(t *testing.T) {
 		t.Fatal(err)
 	}
 	// query arg가 있는 메서드에만 opts QueryOpts 추가
-	assertContains(t, data, "ListByUserID(id int64, opts QueryOpts)")
+	assertContains(t, data, "ListByUserID(userID int64, opts QueryOpts)")
 	// query arg가 없는 메서드에는 opts 없음
 	assertNotContains(t, data, "FindByID(id int64, opts QueryOpts)")
 	assertContains(t, data, "FindByID(id int64)")
