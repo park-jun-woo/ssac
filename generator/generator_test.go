@@ -44,7 +44,7 @@ func TestGeneratePut(t *testing.T) {
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	assertContains(t, code, `err := courseModel.Update(*course.ID, title)`)
+	assertContains(t, code, `err := courseModel.Update(course.ID, title)`)
 }
 
 func TestGenerateDelete(t *testing.T) {
@@ -56,7 +56,7 @@ func TestGenerateDelete(t *testing.T) {
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	assertContains(t, code, `err = reservationModel.Cancel(*reservation.ID)`)
+	assertContains(t, code, `err = reservationModel.Cancel(reservation.ID)`)
 }
 
 func TestGenerateEmpty(t *testing.T) {
@@ -96,7 +96,7 @@ func TestGenerateState(t *testing.T) {
 	}
 	code := mustGenerate(t, sf, nil)
 	assertContains(t, code, `err := reservationstate.CanTransition(reservationstate.Input{`)
-	assertContains(t, code, `Status: *reservation.Status`)
+	assertContains(t, code, `Status: reservation.Status`)
 	assertContains(t, code, `"cancel"`)
 	assertContains(t, code, `err != nil`)
 	assertContains(t, code, `err.Error()`)
@@ -111,8 +111,8 @@ func TestGenerateAuth(t *testing.T) {
 	}
 	code := mustGenerate(t, sf, nil)
 	assertContains(t, code, `authz.Check(currentUser, "delete", "project", authz.Input{`)
-	assertContains(t, code, `ID: *project.ID`)
-	assertContains(t, code, `Owner: *project.OwnerID`)
+	assertContains(t, code, `ID: project.ID`)
+	assertContains(t, code, `Owner: project.OwnerID`)
 	assertContains(t, code, `currentUser := c.MustGet("currentUser")`)
 }
 
@@ -128,7 +128,7 @@ func TestGenerateCallWithResult(t *testing.T) {
 	}
 	code := mustGenerate(t, sf, nil)
 	assertContains(t, code, `auth.VerifyPassword(auth.VerifyPasswordRequest{`)
-	assertContains(t, code, `Email: *user.Email`)
+	assertContains(t, code, `Email: user.Email`)
 	assertContains(t, code, `Password: password`)
 	assertContains(t, code, `http.StatusInternalServerError`)
 }
@@ -142,7 +142,7 @@ func TestGenerateCallWithoutResult(t *testing.T) {
 	}
 	code := mustGenerate(t, sf, nil)
 	assertContains(t, code, `notification.Send(notification.SendRequest{`)
-	assertContains(t, code, `ID: *reservation.ID`)
+	assertContains(t, code, `ID: reservation.ID`)
 	assertContains(t, code, `Status: "cancelled"`)
 	assertContains(t, code, `_, err :=`)
 	assertContains(t, code, `http.StatusUnauthorized`)
