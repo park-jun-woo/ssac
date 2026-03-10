@@ -97,9 +97,10 @@ func GetCourse() {}
 | `variable.Field` | 이전 결과 변수의 필드 | `course.InstructorID` |
 | `currentUser.Field` | 인증 컨텍스트 (예약 소스) | `currentUser.ID` |
 | `config.Field` | 환경 설정 (예약 소스) | `config.APIKey` |
+| `query` | QueryOpts (페이지네이션/정렬/필터, 예약 소스) | `query` |
 | `"literal"` | 문자열 리터럴 | `"cancelled"` |
 
-**예약 소스 (Reserved Sources)**: `request`, `currentUser`, `config`는 시스템이 사전 정의하는 특수 소스다.
+**예약 소스 (Reserved Sources)**: `request`, `currentUser`, `config`, `query`는 시스템이 사전 정의하는 특수 소스다.
 result 변수명으로 사용하면 validator에서 ERROR가 발생한다.
 
 **타입별 필수 요소:**
@@ -503,10 +504,20 @@ x-include:
   allowed: [room_id:rooms.id, user_id:users.id]   # FK컬럼:참조테이블.참조컬럼
 ```
 
+SSaC spec에서 `query` 예약 소스를 명시적으로 사용해야 한다:
+
+```go
+// @get []Reservation reservations = Reservation.ListByUserID(currentUser.ID, query)
+```
+
 코드젠 효과:
-- x- 있는 operation의 메서드에 `opts QueryOpts` 파라미터 추가
-- `:many` + x-pagination → 반환 타입: `([]T, int, error)` (total count 포함)
+- SSaC에 `query` 인자가 있는 메서드에만 `opts QueryOpts` 파라미터 추가 (암묵적 삽입 없음)
+- `query` + `[]Type` 결과 → 반환 타입: `([]T, int, error)` (total count 포함)
 - `QueryOpts` struct 자동 생성 (Limit, Offset, Cursor, SortCol, SortDir, Filters)
+
+교차 검증:
+- OpenAPI에 x-extensions 있는데 SSaC에 `query` 없으면 **WARNING**
+- SSaC에 `query` 있는데 OpenAPI에 x-extensions 없으면 **ERROR**
 
 ---
 

@@ -58,11 +58,12 @@ Args 형식: `source.Field` 또는 `"literal"`
 - `config.APIKey` — 환경 설정 (예약 소스)
 - `"cancelled"` — 문자열 리터럴
 
-예약 소스 (Reserved Sources): `request`, `currentUser`, `config`
+예약 소스 (Reserved Sources): `request`, `currentUser`, `config`, `query`
 - 사용자가 선언하지 않는 특수 소스. result 변수명으로 사용 불가 (validator ERROR)
 - `request.Field` → 코드젠에서 `lcFirst(Field)` 로컬 변수로 치환
 - `currentUser.Field` → `currentUser.Field` 실제 변수 유지
 - `config.Field` → `config.Field` 실제 변수 유지
+- `query` → 코드젠에서 `opts` (QueryOpts) 변수로 변환. OpenAPI x-extensions와 교차 검증
 
 타입별 필수 요소:
 
@@ -129,7 +130,7 @@ files/                           # 기초 자료
 - **타입 변환 코드젠**: DDL 컬럼 타입 기반 request 파라미터 변환 (int64→`strconv.ParseInt`, time.Time→`time.Parse`, 400 early return)
 - **Guard 값 타입**: result 타입에 따른 zero value 비교 (int→`== 0`/`> 0`, pointer→`== nil`/`!= nil`)
 - **Stale 데이터 경고**: put/delete 후 갱신 없이 response에 사용하면 WARNING
-- **QueryOpts 자동 전달**: x-확장 있으면 `opts := QueryOpts{}` 생성 + 모델 호출에 `opts` 인자 자동 추가
+- **QueryOpts**: SSaC에 `query` 예약 소스가 명시된 메서드에만 `opts QueryOpts` 전달 (암묵적 삽입 없음)
 - **List 3-tuple 반환**: many + QueryOpts → `result, total, err :=` (count 포함)
 - **모델 인터페이스 파생**: 3 SSOT 교차(sqlc 카디널리티 + SSaC Args + OpenAPI x-확장) → `<outDir>/model/models_gen.go`
 - **도메인 폴더 구조**: `service/auth/login.go` → `Domain="auth"` → `outDir/auth/login.go`, `package auth`

@@ -30,9 +30,10 @@ Args format: `source.Field` or `"literal"`
 - `course.InstructorID` — from previous result variable
 - `currentUser.ID` — from auth context (reserved source)
 - `config.APIKey` — from environment config (reserved source)
+- `query` — QueryOpts (pagination/sort/filter), explicit in args (reserved source)
 - `"cancelled"` — string literal
 
-Reserved sources: `request`, `currentUser`, `config` — cannot be used as result variable names.
+Reserved sources: `request`, `currentUser`, `config`, `query` — cannot be used as result variable names.
 
 Required elements per type:
 
@@ -184,12 +185,13 @@ Additional features when symbol table (external SSOT) is available:
 - **Go naming conventions**: Initialism-aware `lcFirst`/`ucFirst` (e.g. `ID`→`id`, `URL`→`url`)
 - **@dto tag**: `// @dto` annotated struct → skips DDL table matching
 - **DDL FK/Index parsing**: REFERENCES (inline/constraint), CREATE INDEX → `DDLTable.ForeignKeys`, `DDLTable.Indexes`
-- **QueryOpts auto-pass**: x-extensions present → `opts := QueryOpts{}` + `c.Query()` based parsing + `opts` arg appended
-- **List 3-tuple return**: many + QueryOpts → `result, total, err :=` (includes count)
+- **QueryOpts**: `query` reserved source in args → `opts := QueryOpts{}` + `c.Query()` parsing. No implicit injection.
+- **List 3-tuple return**: `query` arg + `[]Type` result → `result, total, err :=` (includes count)
+- **Query cross-validation**: OpenAPI x-extensions ↔ SSaC `query` mismatch detection (ERROR/WARNING)
 - **Model interface derivation**: 3 SSOT sources → `<outDir>/model/models_gen.go`
   - sqlc: method names, cardinality (:one→`*T`, :many→`[]T`, :exec→`error`)
-  - SSaC: all args included (request, currentUser, variable refs, literals→DDL reverse-mapping)
-  - OpenAPI x-: infrastructure params (x-pagination → `opts QueryOpts` added)
+  - SSaC: all args included (request, currentUser, variable refs, literals→DDL reverse-mapping, query→`opts QueryOpts`)
+  - OpenAPI x-: infrastructure params validated against SSaC `query` usage
 - **Domain folder structure**: `service/auth/login.go` → `Domain="auth"` → `outDir/auth/login.go`, `package auth`
 - **@state codegen**: `@state {id} {inputs} "transition"` → `{id}state.CanTransition({id}state.Input{...}, "transition")`, import `"states/{id}state"`
 - **@auth codegen**: `@auth "action" "resource" {inputs}` → `authz.Check(currentUser, "action", "resource", authz.Input{...})`
@@ -221,9 +223,11 @@ Infrastructure parameters declared in OpenAPI x- extensions. SSaC specs only dec
 ```
 
 Codegen effects:
-- Operations with x- get `opts QueryOpts` parameter in model methods
-- `:many` + x-pagination → return type includes total count: `([]T, int, error)`
+- SSaC spec must explicitly include `query` in args: `Model.List(args..., query)`
+- Model methods with `query` arg get `opts QueryOpts` parameter
+- `query` arg + `[]Type` result → return type includes total count: `([]T, int, error)`
 - `QueryOpts` struct auto-generated (Limit, Offset, Cursor, SortCol, SortDir, Filters)
+- Cross-validation: OpenAPI x- present but SSaC missing `query` → WARNING; SSaC `query` without OpenAPI x- → ERROR
 
 ## Coding Conventions
 
@@ -231,4 +235,4 @@ Codegen effects:
 - Filenames: snake_case, variables/functions: camelCase, types: PascalCase
 - Go common initialisms: `ID`, `URL`, `HTTP`, `API` etc. — all-caps (exported) or all-lowercase (unexported first word)
 - Tests: `go test ./parser/... ./validator/... ./generator/... -count=1`
-- 76 tests: parser 25 + validator 31 + generator 20
+- 81 tests: parser 25 + validator 34 + generator 22

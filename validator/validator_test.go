@@ -488,6 +488,68 @@ func TestValidateReservedSourceNonReservedOK(t *testing.T) {
 	}
 }
 
+// --- 외부 검증: query 교차 검증 ---
+
+func TestValidateQueryUsageMissing(t *testing.T) {
+	st := &SymbolTable{
+		Models:     map[string]ModelSymbol{},
+		Operations: map[string]OperationSymbol{
+			"ListReservations": {
+				XPagination: &XPagination{Style: "offset", DefaultLimit: 20, MaxLimit: 100},
+			},
+		},
+		DDLTables: map[string]DDLTable{},
+	}
+	funcs := []parser.ServiceFunc{{
+		Name: "ListReservations", FileName: "list_reservations.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Reservation.List", Args: []parser.Arg{}, Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
+		},
+	}}
+	errs := ValidateWithSymbols(funcs, st)
+	assertHasWarning(t, errs, "query가 사용되지 않았습니다")
+}
+
+func TestValidateQueryUsageNoOpenAPI(t *testing.T) {
+	st := &SymbolTable{
+		Models:     map[string]ModelSymbol{},
+		Operations: map[string]OperationSymbol{},
+		DDLTables:  map[string]DDLTable{},
+	}
+	funcs := []parser.ServiceFunc{{
+		Name: "GetCourse", FileName: "get_course.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Course.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}, {Source: "query"}}, Result: &parser.Result{Type: "Course", Var: "course"}},
+		},
+	}}
+	errs := ValidateWithSymbols(funcs, st)
+	assertHasError(t, errs, "OpenAPI에 x-pagination")
+}
+
+func TestValidateQueryUsageMatch(t *testing.T) {
+	st := &SymbolTable{
+		Models:     map[string]ModelSymbol{},
+		Operations: map[string]OperationSymbol{
+			"ListReservations": {
+				XPagination: &XPagination{Style: "offset", DefaultLimit: 20, MaxLimit: 100},
+			},
+		},
+		DDLTables: map[string]DDLTable{},
+	}
+	funcs := []parser.ServiceFunc{{
+		Name: "ListReservations", FileName: "list_reservations.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Reservation.List", Args: []parser.Arg{{Source: "query"}}, Result: &parser.Result{Type: "[]Reservation", Var: "reservations"}},
+		},
+	}}
+	errs := ValidateWithSymbols(funcs, st)
+	for _, e := range errs {
+		if contains(e.Message, "query") {
+			t.Errorf("unexpected query validation error: %s", e.Message)
+		}
+	}
+}
+
 // --- helpers ---
 
 func assertHasError(t *testing.T, errs []ValidationError, substr string) {

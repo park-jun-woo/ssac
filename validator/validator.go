@@ -23,6 +23,7 @@ func ValidateWithSymbols(funcs []parser.ServiceFunc, st *SymbolTable) []Validati
 		errs = append(errs, validateModel(sf, st)...)
 		errs = append(errs, validateRequest(sf, st)...)
 		errs = append(errs, validateResponse(sf, st)...)
+		errs = append(errs, validateQueryUsage(sf, st)...)
 	}
 	return errs
 }
@@ -376,11 +377,50 @@ func validateResponse(sf parser.ServiceFunc, st *SymbolTable) []ValidationError 
 	return errs
 }
 
+// validateQueryUsage는 SSaC의 query 사용과 OpenAPI x-extensions 간 교차 검증을 수행한다.
+func validateQueryUsage(sf parser.ServiceFunc, st *SymbolTable) []ValidationError {
+	if st == nil {
+		return nil
+	}
+
+	op, hasOp := st.Operations[sf.Name]
+	opHasQueryOpts := hasOp && op.HasQueryOpts()
+
+	specHasQuery := false
+	for _, seq := range sf.Sequences {
+		for _, a := range seq.Args {
+			if a.Source == "query" {
+				specHasQuery = true
+				break
+			}
+		}
+		if specHasQuery {
+			break
+		}
+	}
+
+	var errs []ValidationError
+	ctx := errCtx{sf.FileName, sf.Name, -1}
+
+	if specHasQuery && !opHasQueryOpts {
+		errs = append(errs, ctx.err("@query", "SSaC에 query가 사용되었지만 OpenAPI에 x-pagination/sort/filter가 없습니다"))
+	}
+	if opHasQueryOpts && !specHasQuery {
+		errs = append(errs, ValidationError{
+			FileName: ctx.fileName, FuncName: ctx.funcName, SeqIndex: ctx.seqIndex,
+			Tag: "@query", Message: "OpenAPI에 x-pagination/sort/filter가 있지만 SSaC에 query가 사용되지 않았습니다", Level: "WARNING",
+		})
+	}
+
+	return errs
+}
+
 // reservedSources는 사용자가 result 변수명으로 사용할 수 없는 예약 소스다.
 var reservedSources = map[string]bool{
 	"request":     true,
 	"currentUser": true,
 	"config":      true,
+	"query":       true,
 }
 
 // validateReservedSourceConflict는 result 변수명이 예약 소스와 충돌하면 ERROR를 반환한다.
@@ -403,7 +443,7 @@ func argVarRef(a parser.Arg) string {
 	if a.Literal != "" {
 		return ""
 	}
-	if a.Source == "request" || a.Source == "currentUser" || a.Source == "" {
+	if a.Source == "request" || a.Source == "currentUser" || a.Source == "query" || a.Source == "" {
 		return ""
 	}
 	return a.Source

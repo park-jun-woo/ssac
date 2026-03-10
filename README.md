@@ -80,9 +80,9 @@ func CreateSession(c *gin.Context) {
 | `call` | `@call [Type var =] pkg.Func(args)` | External function call |
 | `response` | `@response { field: var }` | Return response (multi-line block) |
 
-Args format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`) or `"literal"`.
+Args format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`), `query` (QueryOpts), or `"literal"`.
 
-Reserved sources (`request`, `currentUser`, `config`) cannot be used as result variable names. Append `!` to any type to suppress WARNINGs (e.g. `@delete!`, `@response!`).
+Reserved sources (`request`, `currentUser`, `config`, `query`) cannot be used as result variable names. Append `!` to any type to suppress WARNINGs (e.g. `@delete!`, `@response!`).
 
 ## Install & Run
 
@@ -127,12 +127,13 @@ When external SSOT (symbol table) is available, `ssac gen` adds:
 - **Guard value types**: Type-aware zero checks (`int` → `== 0`/`> 0`, pointer → `== nil`/`!= nil`)
 - **`:=` vs `=` tracking**: Go variable re-declaration uses `=` for already-declared variables
 - **Go naming conventions**: Initialism-aware naming (e.g. `ID`→`id`, `URL`→`url`)
-- **QueryOpts auto-pass**: x-extensions → `opts := QueryOpts{}` + `opts` arg appended to model call
-- **List 3-tuple return**: `:many` + QueryOpts → `result, total, err :=` (includes count)
+- **QueryOpts**: `query` reserved source in args → `opts := QueryOpts{}` + `c.Query()` parsing (no implicit injection)
+- **List 3-tuple return**: `query` arg + `[]Type` result → `result, total, err :=` (includes count)
+- **Query cross-validation**: OpenAPI x-extensions ↔ SSaC `query` mismatch detection (ERROR/WARNING)
 - **Model interface derivation**: Crosses 3 SSOT sources → `<outDir>/model/models_gen.go`
   - sqlc: method names + cardinality (`:one`→`*T`, `:many`→`[]T`, `:exec`→`error`)
-  - SSaC: all args included (request, currentUser, variable refs, literals→DDL reverse-mapping)
-  - OpenAPI x-extensions → `opts QueryOpts` parameter added
+  - SSaC: all args included (request, currentUser, variable refs, literals→DDL reverse-mapping, query→`opts QueryOpts`)
+  - OpenAPI x-extensions: validated against SSaC `query` usage
 - **Domain folder structure**: `service/auth/login.go` → outputs to `outDir/auth/login.go` with `package auth`
 - **@call codegen**: `pkg.Func(pkg.FuncRequest{args...})` (unkeyed positional). No result → `_, err` guard-style (401), with result → value-style (500)
 - **@state codegen**: `{id}state.CanTransition({id}state.Input{...}, "transition")`
@@ -201,7 +202,7 @@ files/                           # Design documents
 go test ./parser/... ./validator/... ./generator/... -count=1
 ```
 
-76 tests: parser 25 + validator 31 + generator 20
+81 tests: parser 25 + validator 34 + generator 22
 
 ## License
 

@@ -97,7 +97,7 @@ func (g *GoTarget) GenerateFunc(sf parser.ServiceFunc, st *validator.SymbolTable
 	declaredVars := map[string]bool{}
 	funcHasTotal := false
 	for i, seq := range sf.Sequences {
-		data := buildTemplateData(seq, &errDeclared, declaredVars, resultTypes, st, sf.Name, needsQO)
+		data := buildTemplateData(seq, &errDeclared, declaredVars, resultTypes, st, sf.Name)
 		if data.HasTotal {
 			funcHasTotal = true
 		}
@@ -186,7 +186,7 @@ type templateData struct {
 	ReAssign bool
 }
 
-func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[string]bool, resultTypes map[string]string, st *validator.SymbolTable, funcName string, hasQO bool) templateData {
+func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[string]bool, resultTypes map[string]string, st *validator.SymbolTable, funcName string) templateData {
 	d := templateData{
 		Message: seq.Message,
 		Result:  seq.Result,
@@ -213,15 +213,9 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 	// Args → code
 	d.ArgsCode = buildArgsCode(seq.Args)
 
-	// QueryOpts auto-append for List methods
-	if hasQO && seq.Type == parser.SeqGet && isListMethod(seq.Model) {
-		if d.ArgsCode != "" {
-			d.ArgsCode += ", "
-		}
-		d.ArgsCode += "opts"
-		if seq.Result != nil && strings.HasPrefix(seq.Result.Type, "[]") {
-			d.HasTotal = true
-		}
+	// query arg → HasTotal (List + query → 3-tuple return)
+	if hasQueryArg(seq.Args) && seq.Result != nil && strings.HasPrefix(seq.Result.Type, "[]") {
+		d.HasTotal = true
 	}
 
 	// Guard
@@ -311,6 +305,9 @@ func buildArgsCode(args []parser.Arg) string {
 func argToCode(a parser.Arg) string {
 	if a.Literal != "" {
 		return `"` + a.Literal + `"`
+	}
+	if a.Source == "query" {
+		return "opts"
 	}
 	if a.Source == "request" {
 		return lcFirst(a.Field)
@@ -606,15 +603,11 @@ func needsCurrentUser(seqs []parser.Sequence) bool {
 }
 
 func needsQueryOpts(sf parser.ServiceFunc, st *validator.SymbolTable) bool {
-	if st == nil {
-		return false
-	}
-	if !hasAnyQueryOpts(st) {
-		return false
-	}
 	for _, seq := range sf.Sequences {
-		if seq.Type == parser.SeqGet && isListMethod(seq.Model) {
-			return true
+		for _, a := range seq.Args {
+			if a.Source == "query" {
+				return true
+			}
 		}
 	}
 	return false
@@ -705,20 +698,9 @@ func zeroValueChecks(typeName string) (zeroCheck, existsCheck string) {
 	}
 }
 
-func isListMethod(model string) bool {
-	parts := strings.SplitN(model, ".", 2)
-	if len(parts) < 2 {
-		return false
-	}
-	return strings.HasPrefix(parts[1], "List")
-}
-
-func hasAnyQueryOpts(st *validator.SymbolTable) bool {
-	if st == nil {
-		return false
-	}
-	for _, op := range st.Operations {
-		if op.HasQueryOpts() {
+func hasQueryArg(args []parser.Arg) bool {
+	for _, a := range args {
+		if a.Source == "query" {
 			return true
 		}
 	}
@@ -845,6 +827,10 @@ func deriveInterfaces(usages []modelUsage, st *validator.SymbolTable) []derivedI
 			dm := derivedMethod{Name: methodName}
 
 			for _, a := range usage.Args {
+				if a.Source == "query" {
+					dm.HasQueryOpts = true
+					continue
+				}
 				dp := derivedParam{
 					Name:   resolveArgParamName(a),
 					GoType: resolveArgParamType(a, usage.ModelName, st),
@@ -852,10 +838,6 @@ func deriveInterfaces(usages []modelUsage, st *validator.SymbolTable) []derivedI
 				if dp.Name != "" {
 					dm.Params = append(dm.Params, dp)
 				}
-			}
-
-			if op, ok := st.Operations[usage.FuncName]; ok && op.HasQueryOpts() {
-				dm.HasQueryOpts = true
 			}
 
 			dm.ReturnType = deriveReturnType(mi, usage, dm.HasQueryOpts)
