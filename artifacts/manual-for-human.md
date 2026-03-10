@@ -85,6 +85,7 @@ func GetCourse() {}
 - 함수 위에 `// @` 주석으로 시퀀스를 한 줄씩 나열
 - `@response`만 멀티라인 블록 (`{ ... }`)
 - spec 파일의 Go import 선언은 생성 코드에 전달됨
+- `@type!` — `!` 접미사로 해당 시퀀스의 WARNING 억제 (ERROR는 영향 없음)
 
 ### 인자(Args) 표기법
 
@@ -100,6 +101,20 @@ func GetCourse() {}
 
 **예약 소스 (Reserved Sources)**: `request`, `currentUser`, `config`는 시스템이 사전 정의하는 특수 소스다.
 result 변수명으로 사용하면 validator에서 ERROR가 발생한다.
+
+**타입별 필수 요소:**
+
+| 타입 | 필수 |
+|---|---|
+| get | Model, Result (Args 선택) |
+| post | Model, Result, Args |
+| put | Model, Args |
+| delete | Model, Args (0-arg WARNING, `@delete!`로 억제) |
+| empty, exists | Target, Message |
+| state | DiagramID, Inputs, Transition, Message |
+| auth | Action, Resource, Message |
+| call | Model (pkg.Func 형식) |
+| response | (없음, Fields 선택) |
 
 ### 도메인 폴더 구조
 
@@ -169,6 +184,7 @@ if err != nil {
 
 ```go
 // @delete Room.Delete(request.RoomID)
+// @delete! Room.DeleteAll()              — ! 접미사로 0-arg WARNING 억제
 ```
 
 ### @empty — null이면 종료 (404)
@@ -546,6 +562,15 @@ type QueryOpts struct {
 | WARNING | 메시지 출력, 코드 생성 계속 |
 
 WARNING 예시: put/delete 후 갱신 없이 response에서 이전 변수를 사용하면 stale 데이터 경고
+
+### WARNING 억제 (`!` 접미사)
+
+모든 시퀀스 타입에 `!` 접미사를 붙이면 해당 시퀀스의 WARNING을 억제한다. ERROR는 영향 없음.
+
+```go
+// @delete! Room.DeleteAll()              — 0-arg 전체 삭제 WARNING 억제
+// @response! { room: room }              — stale 데이터 WARNING 억제
+```
 
 ---
 

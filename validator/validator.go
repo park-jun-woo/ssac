@@ -45,26 +45,49 @@ func validateRequiredFields(sf parser.ServiceFunc) []ValidationError {
 		ctx := errCtx{sf.FileName, sf.Name, i}
 
 		switch seq.Type {
-		case parser.SeqGet, parser.SeqPost:
+		case parser.SeqGet:
 			if seq.Model == "" {
-				errs = append(errs, ctx.err("@"+seq.Type, "Model 누락"))
+				errs = append(errs, ctx.err("@get", "Model 누락"))
 			}
 			if seq.Result == nil {
-				errs = append(errs, ctx.err("@"+seq.Type, "Result 누락"))
+				errs = append(errs, ctx.err("@get", "Result 누락"))
+			}
+			// Args는 0개 허용 (비즈니스 필터 없는 전체 조회)
+
+		case parser.SeqPost:
+			if seq.Model == "" {
+				errs = append(errs, ctx.err("@post", "Model 누락"))
+			}
+			if seq.Result == nil {
+				errs = append(errs, ctx.err("@post", "Result 누락"))
 			}
 			if len(seq.Args) == 0 {
-				errs = append(errs, ctx.err("@"+seq.Type, "Args 누락"))
+				errs = append(errs, ctx.err("@post", "Args 누락"))
 			}
 
-		case parser.SeqPut, parser.SeqDelete:
+		case parser.SeqPut:
 			if seq.Model == "" {
-				errs = append(errs, ctx.err("@"+seq.Type, "Model 누락"))
+				errs = append(errs, ctx.err("@put", "Model 누락"))
 			}
 			if seq.Result != nil {
-				errs = append(errs, ctx.err("@"+seq.Type, "Result는 nil이어야 함"))
+				errs = append(errs, ctx.err("@put", "Result는 nil이어야 함"))
 			}
 			if len(seq.Args) == 0 {
-				errs = append(errs, ctx.err("@"+seq.Type, "Args 누락"))
+				errs = append(errs, ctx.err("@put", "Args 누락"))
+			}
+
+		case parser.SeqDelete:
+			if seq.Model == "" {
+				errs = append(errs, ctx.err("@delete", "Model 누락"))
+			}
+			if seq.Result != nil {
+				errs = append(errs, ctx.err("@delete", "Result는 nil이어야 함"))
+			}
+			if len(seq.Args) == 0 && !seq.SuppressWarn {
+				errs = append(errs, ValidationError{
+					FileName: ctx.fileName, FuncName: ctx.funcName, SeqIndex: ctx.seqIndex,
+					Tag: "@delete", Message: "Args가 없습니다 — 전체 삭제 의도가 맞는지 확인하세요", Level: "WARNING",
+				})
 			}
 
 		case parser.SeqEmpty, parser.SeqExists:
@@ -200,6 +223,9 @@ func validateStaleResponse(sf parser.ServiceFunc) []ValidationError {
 				mutated[modelName] = true
 			}
 		case parser.SeqResponse:
+			if seq.SuppressWarn {
+				continue
+			}
 			ctx := errCtx{sf.FileName, sf.Name, i}
 			for field, val := range seq.Fields {
 				ref := rootVar(val)

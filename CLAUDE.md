@@ -48,6 +48,7 @@ ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블
 // @auth "action" "resource" {inputs} "message"   — 권한 검사 (403)
 // @call Type var = pkg.Func(args...)             — 외부 함수 호출 (result 있음/없음)
 // @response { field: var, field: var.Member }    — 응답 (멀티라인 블록)
+// @type! — 모든 시퀀스에 ! 접미사로 WARNING 억제 (e.g. @delete!, @response!)
 ```
 
 Args 형식: `source.Field` 또는 `"literal"`
@@ -67,8 +68,10 @@ Args 형식: `source.Field` 또는 `"literal"`
 
 | 타입 | 필수 |
 |---|---|
-| get, post | Model, Result, Args |
-| put, delete | Model, Args |
+| get | Model, Result (Args 선택) |
+| post | Model, Result, Args |
+| put | Model, Args |
+| delete | Model, Args (0-arg WARNING, `@delete!`로 억제) |
 | empty, exists | Target, Message |
 | state | DiagramID, Inputs, Transition, Message |
 | auth | Action, Resource, Message |

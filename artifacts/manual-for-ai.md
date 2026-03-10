@@ -34,6 +34,29 @@ Args format: `source.Field` or `"literal"`
 
 Reserved sources: `request`, `currentUser`, `config` — cannot be used as result variable names.
 
+Required elements per type:
+
+| Type | Required |
+|---|---|
+| get | Model, Result (Args optional) |
+| post | Model, Result, Args |
+| put | Model, Args |
+| delete | Model, Args (0-arg WARNING, `@delete!` suppresses) |
+| empty, exists | Target, Message |
+| state | DiagramID, Inputs, Transition, Message |
+| auth | Action, Resource, Message |
+| call | Model (pkg.Func format) |
+| response | (none, Fields optional) |
+
+### WARNING Suppression (`!` suffix)
+
+Append `!` to any sequence type to suppress WARNINGs for that sequence. ERRORs are unaffected.
+
+```go
+// @delete! Room.DeleteAll()              — Suppresses 0-arg WARNING
+// @response! { room: room }              — Suppresses stale data WARNING
+```
+
 ### Guards
 
 ```go
@@ -156,7 +179,9 @@ Additional features when symbol table (external SSOT) is available:
 
 - **Type conversion**: DDL column type → `strconv.ParseInt`, `time.Parse` with 400 early return
 - **Guard value types**: Zero value comparison based on result type (int→`== 0`/`> 0`, pointer→`== nil`/`!= nil`)
-- **Stale data warning**: WARNING when response uses variable after put/delete without re-fetch
+- **Stale data warning**: WARNING when response uses variable after put/delete without re-fetch (suppressed by `@response!`)
+- **`:=` vs `=` tracking**: Go variable re-declaration uses `=` for already-declared variables
+- **Go naming conventions**: Initialism-aware `lcFirst`/`ucFirst` (e.g. `ID`→`id`, `URL`→`url`)
 - **@dto tag**: `// @dto` annotated struct → skips DDL table matching
 - **DDL FK/Index parsing**: REFERENCES (inline/constraint), CREATE INDEX → `DDLTable.ForeignKeys`, `DDLTable.Indexes`
 - **QueryOpts auto-pass**: x-extensions present → `opts := QueryOpts{}` + `c.Query()` based parsing + `opts` arg appended
@@ -204,4 +229,6 @@ Codegen effects:
 
 - gofmt compliant, immediate error handling (early return)
 - Filenames: snake_case, variables/functions: camelCase, types: PascalCase
+- Go common initialisms: `ID`, `URL`, `HTTP`, `API` etc. — all-caps (exported) or all-lowercase (unexported first word)
 - Tests: `go test ./parser/... ./validator/... ./generator/... -count=1`
+- 78 tests: parser 25 + validator 33 + generator 20

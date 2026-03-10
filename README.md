@@ -82,6 +82,8 @@ func CreateSession(c *gin.Context) {
 
 Args format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`) or `"literal"`.
 
+Reserved sources (`request`, `currentUser`, `config`) cannot be used as result variable names. Append `!` to any type to suppress WARNINGs (e.g. `@delete!`, `@response!`).
+
 ## Install & Run
 
 ```bash
@@ -102,7 +104,9 @@ Internal validation (always):
 External SSOT cross-validation (when project structure detected):
 - Model/method existence (sqlc queries, Go interface)
 - Request/response field matching (OpenAPI, forward + reverse)
-- Stale data warning: put/delete followed by response without re-fetch (WARNING level)
+- Stale data warning: put/delete followed by response without re-fetch (WARNING level, suppressed by `@response!`)
+- Reserved source conflict: result variable named `request`/`currentUser`/`config` (ERROR)
+- @delete 0-arg warning: delete with no arguments (WARNING, suppressed by `@delete!`)
 
 ```bash
 ssac validate specs/dummy-study      # With external validation
@@ -121,6 +125,8 @@ Generated code uses **gin** framework (`func Name(c *gin.Context)`):
 When external SSOT (symbol table) is available, `ssac gen` adds:
 - **Type conversion**: DDL column types → `strconv.ParseInt`, `time.Parse` with 400 early return
 - **Guard value types**: Type-aware zero checks (`int` → `== 0`/`> 0`, pointer → `== nil`/`!= nil`)
+- **`:=` vs `=` tracking**: Go variable re-declaration uses `=` for already-declared variables
+- **Go naming conventions**: Initialism-aware naming (e.g. `ID`→`id`, `URL`→`url`)
 - **QueryOpts auto-pass**: x-extensions → `opts := QueryOpts{}` + `opts` arg appended to model call
 - **List 3-tuple return**: `:many` + QueryOpts → `result, total, err :=` (includes count)
 - **Model interface derivation**: Crosses 3 SSOT sources → `<outDir>/model/models_gen.go`
@@ -195,7 +201,7 @@ files/                           # Design documents
 go test ./parser/... ./validator/... ./generator/... -count=1
 ```
 
-63 tests: parser 21 + validator 24 + generator 18
+78 tests: parser 25 + validator 33 + generator 20
 
 ## License
 

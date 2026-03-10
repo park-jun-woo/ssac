@@ -422,6 +422,40 @@ func TestValidateReverseResponsePaginationTotal(t *testing.T) {
 	}
 }
 
+// --- 내부 검증: SuppressWarn ---
+
+func TestValidateDeleteNoArgsSuppressed(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "DeleteAll", FileName: "delete_all.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqDelete, Model: "Room.DeleteAll", SuppressWarn: true},
+		},
+	}}
+	errs := Validate(funcs)
+	for _, e := range errs {
+		if e.IsWarning() && contains(e.Message, "전체 삭제") {
+			t.Errorf("expected WARNING to be suppressed: %s", e.Message)
+		}
+	}
+}
+
+func TestValidateStaleResponseSuppressed(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "Cancel", FileName: "cancel.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Reservation.FindByID", Args: []parser.Arg{{Source: "request", Field: "ID"}}, Result: &parser.Result{Type: "Reservation", Var: "reservation"}},
+			{Type: parser.SeqPut, Model: "Reservation.UpdateStatus", Args: []parser.Arg{{Source: "request", Field: "ID"}, {Literal: "cancelled"}}},
+			{Type: parser.SeqResponse, Fields: map[string]string{"reservation": "reservation"}, SuppressWarn: true},
+		},
+	}}
+	errs := Validate(funcs)
+	for _, e := range errs {
+		if e.IsWarning() && contains(e.Message, "갱신 없이") {
+			t.Errorf("expected stale WARNING to be suppressed: %s", e.Message)
+		}
+	}
+}
+
 // --- 내부 검증: 예약 소스 ---
 
 func TestValidateReservedSourceConflict(t *testing.T) {

@@ -37,7 +37,8 @@ type Sequence struct {
 	Fields map[string]string // {course: "course", instructor_name: "instructor.Name"}
 
 	// 공통
-	Message string // 에러 메시지
+	Message      string // 에러 메시지
+	SuppressWarn bool   // @type! — WARNING 억제
 }
 
 // Arg는 함수 호출 인자다.

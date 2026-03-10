@@ -415,6 +415,76 @@ func CreateCourse(c *gin.Context) {}
 	assertEqual(t, "Func1", sfs[1].Name, "CreateCourse")
 }
 
+// --- SuppressWarn (!) ---
+
+func TestParseSuppressWarnDelete(t *testing.T) {
+	src := `package service
+
+// @delete! Room.DeleteAll()
+func DeleteAll() {}
+`
+	sfs := parseTestFile(t, src)
+	seq := sfs[0].Sequences[0]
+	assertEqual(t, "Type", seq.Type, SeqDelete)
+	assertEqual(t, "Model", seq.Model, "Room.DeleteAll")
+	if !seq.SuppressWarn {
+		t.Error("expected SuppressWarn=true")
+	}
+}
+
+func TestParseSuppressWarnGet(t *testing.T) {
+	src := `package service
+
+// @get! Course course = Course.FindByID(request.CourseID)
+func GetCourse() {}
+`
+	sfs := parseTestFile(t, src)
+	seq := sfs[0].Sequences[0]
+	assertEqual(t, "Type", seq.Type, SeqGet)
+	assertEqual(t, "Model", seq.Model, "Course.FindByID")
+	if !seq.SuppressWarn {
+		t.Error("expected SuppressWarn=true")
+	}
+}
+
+func TestParseNoSuppressWarn(t *testing.T) {
+	src := `package service
+
+// @get Course course = Course.FindByID(request.CourseID)
+func GetCourse() {}
+`
+	sfs := parseTestFile(t, src)
+	seq := sfs[0].Sequences[0]
+	if seq.SuppressWarn {
+		t.Error("expected SuppressWarn=false")
+	}
+}
+
+func TestParseSuppressWarnResponse(t *testing.T) {
+	src := `package service
+
+// @get Course course = Course.FindByID(request.ID)
+// @response! {
+//   course: course,
+// }
+func GetCourse() {}
+`
+	sfs := parseTestFile(t, src)
+	var resp *Sequence
+	for i := range sfs[0].Sequences {
+		if sfs[0].Sequences[i].Type == SeqResponse {
+			resp = &sfs[0].Sequences[i]
+			break
+		}
+	}
+	if resp == nil {
+		t.Fatal("expected response sequence")
+	}
+	if !resp.SuppressWarn {
+		t.Error("expected SuppressWarn=true for @response!")
+	}
+}
+
 // --- helpers ---
 
 func parseTestFile(t *testing.T, src string) []ServiceFunc {

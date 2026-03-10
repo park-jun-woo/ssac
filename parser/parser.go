@@ -79,6 +79,7 @@ func parseComments(comments []*ast.Comment) []Sequence {
 	var sequences []Sequence
 	var responseLines []string
 	inResponse := false
+	responseSuppressWarn := false
 
 	for _, c := range comments {
 		line := strings.TrimPrefix(c.Text, "//")
@@ -88,8 +89,9 @@ func parseComments(comments []*ast.Comment) []Sequence {
 			if line == "}" {
 				inResponse = false
 				seq := Sequence{
-					Type:   SeqResponse,
-					Fields: parseResponseFields(responseLines),
+					Type:         SeqResponse,
+					Fields:       parseResponseFields(responseLines),
+					SuppressWarn: responseSuppressWarn,
 				}
 				sequences = append(sequences, seq)
 				responseLines = nil
@@ -106,6 +108,7 @@ func parseComments(comments []*ast.Comment) []Sequence {
 		seq, isResponseStart := parseLine(line)
 		if isResponseStart {
 			inResponse = true
+			responseSuppressWarn = strings.HasPrefix(line, "@response!")
 			responseLines = nil
 			continue
 		}
@@ -120,41 +123,54 @@ func parseComments(comments []*ast.Comment) []Sequence {
 // @response { 의 경우 (nil, true)를 반환하여 멀티라인 모드 시작을 알린다.
 func parseLine(line string) (*Sequence, bool) {
 	if strings.HasPrefix(line, "@response") {
-		trimmed := strings.TrimSpace(strings.TrimPrefix(line, "@response"))
+		tag := "@response"
+		if strings.HasPrefix(line, "@response!") {
+			tag = "@response!"
+		}
+		trimmed := strings.TrimSpace(strings.TrimPrefix(line, tag))
 		if trimmed == "{" {
 			return nil, true
 		}
 	}
 
-	if strings.HasPrefix(line, "@get ") {
-		return parseCRUD(SeqGet, line[5:], true), false
-	}
-	if strings.HasPrefix(line, "@post ") {
-		return parseCRUD(SeqPost, line[6:], true), false
-	}
-	if strings.HasPrefix(line, "@put ") {
-		return parseCRUD(SeqPut, line[5:], false), false
-	}
-	if strings.HasPrefix(line, "@delete ") {
-		return parseCRUD(SeqDelete, line[8:], false), false
-	}
-	if strings.HasPrefix(line, "@empty ") {
-		return parseGuard(SeqEmpty, line[7:]), false
-	}
-	if strings.HasPrefix(line, "@exists ") {
-		return parseGuard(SeqExists, line[8:]), false
-	}
-	if strings.HasPrefix(line, "@state ") {
-		return parseState(line[7:]), false
-	}
-	if strings.HasPrefix(line, "@auth ") {
-		return parseAuth(line[6:]), false
-	}
-	if strings.HasPrefix(line, "@call ") {
-		return parseCall(line[6:]), false
+	// @type! — ! 접미사 감지
+	suppressWarn := false
+	if idx := strings.IndexByte(line, '!'); idx > 0 {
+		spaceIdx := strings.IndexByte(line, ' ')
+		if spaceIdx < 0 || idx < spaceIdx {
+			line = line[:idx] + line[idx+1:]
+			suppressWarn = true
+		}
 	}
 
-	return nil, false
+	var seq *Sequence
+	switch {
+	case strings.HasPrefix(line, "@get "):
+		seq = parseCRUD(SeqGet, line[5:], true)
+	case strings.HasPrefix(line, "@post "):
+		seq = parseCRUD(SeqPost, line[6:], true)
+	case strings.HasPrefix(line, "@put "):
+		seq = parseCRUD(SeqPut, line[5:], false)
+	case strings.HasPrefix(line, "@delete "):
+		seq = parseCRUD(SeqDelete, line[8:], false)
+	case strings.HasPrefix(line, "@empty "):
+		seq = parseGuard(SeqEmpty, line[7:])
+	case strings.HasPrefix(line, "@exists "):
+		seq = parseGuard(SeqExists, line[8:])
+	case strings.HasPrefix(line, "@state "):
+		seq = parseState(line[7:])
+	case strings.HasPrefix(line, "@auth "):
+		seq = parseAuth(line[6:])
+	case strings.HasPrefix(line, "@call "):
+		seq = parseCall(line[6:])
+	default:
+		return nil, false
+	}
+
+	if seq != nil && suppressWarn {
+		seq.SuppressWarn = true
+	}
+	return seq, false
 }
 
 // parseCRUD는 @get/@post/@put/@delete를 파싱한다.
