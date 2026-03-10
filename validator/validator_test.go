@@ -729,3 +729,47 @@ func TestValidateNoPaginationWithWrapper(t *testing.T) {
 	errs := ValidateWithSymbols(funcs, st)
 	assertHasError(t, errs, "x-pagination이 없지만")
 }
+
+func TestValidateResponseDirectPageFieldsMatch(t *testing.T) {
+	st := &SymbolTable{
+		Models:    map[string]ModelSymbol{"Gig": {Methods: map[string]MethodInfo{"List": {Cardinality: "many"}}}},
+		DDLTables: map[string]DDLTable{},
+		Operations: map[string]OperationSymbol{
+			"ListGigs": {
+				XPagination:    &XPagination{Style: "offset"},
+				ResponseFields: map[string]bool{"items": true, "total": true},
+			},
+		},
+	}
+	funcs := []parser.ServiceFunc{{
+		Name: "ListGigs", FileName: "list_gigs.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Gig.List", Inputs: map[string]string{"Query": "query"}, Result: &parser.Result{Type: "Gig", Var: "gigPage", Wrapper: "Page"}},
+			{Type: parser.SeqResponse, Target: "gigPage"},
+		},
+	}}
+	errs := ValidateWithSymbols(funcs, st)
+	assertNoErrors(t, errs)
+}
+
+func TestValidateResponseDirectPageFieldsMissing(t *testing.T) {
+	st := &SymbolTable{
+		Models:    map[string]ModelSymbol{"Gig": {Methods: map[string]MethodInfo{"List": {Cardinality: "many"}}}},
+		DDLTables: map[string]DDLTable{},
+		Operations: map[string]OperationSymbol{
+			"ListGigs": {
+				XPagination:    &XPagination{Style: "offset"},
+				ResponseFields: map[string]bool{"data": true, "count": true},
+			},
+		},
+	}
+	funcs := []parser.ServiceFunc{{
+		Name: "ListGigs", FileName: "list_gigs.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Gig.List", Inputs: map[string]string{"Query": "query"}, Result: &parser.Result{Type: "Gig", Var: "gigPage", Wrapper: "Page"}},
+			{Type: parser.SeqResponse, Target: "gigPage"},
+		},
+	}}
+	errs := ValidateWithSymbols(funcs, st)
+	assertHasError(t, errs, `"items" 필드가 없습니다`)
+}
