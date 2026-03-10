@@ -89,6 +89,60 @@ func TestValidateCallMissingModel(t *testing.T) {
 	assertHasError(t, errs, "Model 누락")
 }
 
+func TestValidateCallPrimitiveReturnType(t *testing.T) {
+	for _, typ := range []string{"string", "int", "int64", "bool", "float64", "time.Time"} {
+		t.Run(typ, func(t *testing.T) {
+			funcs := []parser.ServiceFunc{{
+				Name: "Login", FileName: "login.go",
+				Sequences: []parser.Sequence{{
+					Type:   parser.SeqCall,
+					Model:  "auth.IssueToken",
+					Inputs: map[string]string{"UserID": "user.ID"},
+					Result: &parser.Result{Type: typ, Var: "token"},
+				}},
+			}}
+			errs := Validate(funcs)
+			assertHasError(t, errs, "기본 타입")
+			assertHasError(t, errs, "Response struct 타입을 지정하세요")
+		})
+	}
+}
+
+func TestValidateCallStructReturnTypeOK(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "Login", FileName: "login.go",
+		Sequences: []parser.Sequence{{
+			Type:   parser.SeqCall,
+			Model:  "auth.IssueToken",
+			Inputs: map[string]string{"UserID": "user.ID"},
+			Result: &parser.Result{Type: "TokenResponse", Var: "token"},
+		}},
+	}}
+	errs := Validate(funcs)
+	for _, e := range errs {
+		if contains(e.Message, "기본 타입") {
+			t.Errorf("unexpected primitive type error: %s", e.Message)
+		}
+	}
+}
+
+func TestValidateCallNoResultOK(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "Notify", FileName: "notify.go",
+		Sequences: []parser.Sequence{{
+			Type:   parser.SeqCall,
+			Model:  "notification.Send",
+			Inputs: map[string]string{"ID": "reservation.ID"},
+		}},
+	}}
+	errs := Validate(funcs)
+	for _, e := range errs {
+		if contains(e.Message, "기본 타입") {
+			t.Errorf("unexpected primitive type error: %s", e.Message)
+		}
+	}
+}
+
 func TestValidateResponseEmptyFieldsAllowed(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "DeleteRoom", FileName: "delete_room.go",

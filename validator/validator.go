@@ -127,6 +127,9 @@ func validateRequiredFields(sf parser.ServiceFunc) []ValidationError {
 			if seq.Model == "" {
 				errs = append(errs, ctx.err("@call", "Model 누락"))
 			}
+			if seq.Result != nil && isPrimitiveType(seq.Result.Type) {
+				errs = append(errs, ctx.err("@call", fmt.Sprintf("반환 타입에 기본 타입 %q은 사용할 수 없습니다 — Response struct 타입을 지정하세요", seq.Result.Type)))
+			}
 
 		case parser.SeqResponse:
 			// Fields는 선택 — 빈 @response {} 허용 (DELETE 등)
@@ -474,4 +477,16 @@ func (c errCtx) err(tag, msg string) ValidationError {
 		Tag:      tag,
 		Message:  msg,
 	}
+}
+
+// primitiveTypes는 Go 기본 타입 집합이다.
+var primitiveTypes = map[string]bool{
+	"string": true, "int": true, "int32": true, "int64": true,
+	"float32": true, "float64": true, "bool": true, "byte": true,
+	"rune": true, "time.Time": true,
+}
+
+// isPrimitiveType는 Go 기본 타입 여부를 반환한다.
+func isPrimitiveType(s string) bool {
+	return primitiveTypes[s]
 }
