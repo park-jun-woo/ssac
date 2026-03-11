@@ -56,6 +56,7 @@ ssac validate specs/dummy-study       # 외부 SSOT 교차 검증 (자동 감지
 | 외부 | 패키지 모델 파라미터 매칭 (SSaC↔interface 불일치/누락 → ERROR) |
 | 외부 | Go 예약어 파라미터명 (DDL 컬럼이 `type`, `range` 등 → ERROR) |
 | 외부 | @call 입력 타입 검증 (DDL 역추적 타입 ≠ Request struct 필드 타입 → ERROR) |
+| 외부 | config 타입 검증 (config.* → 지원 불가 타입 대입 시 ERROR) |
 
 ### gen
 
@@ -757,24 +758,40 @@ WARNING 예시: put/delete 후 갱신 없이 response에서 이전 변수를 사
 
 `@get`/`@post`/`@call` result 변수가 이후 시퀀스(guard target, inputs value, response fields)에서 참조되지 않으면 `_`로 생성한다.
 
-```go
-// escrow가 response에서 미참조:
-_, err := billing.HoldEscrow(billing.HoldEscrowRequest{Amount: order.Budget})
+`_` + `err` 이미 선언된 경우 → `_, err =` (`:=`가 아닌 `=`). `_`는 blank identifier이므로 새 변수가 아니기 때문에, 이미 선언된 `err`만 남으면 `:=` 불가.
 
-// escrow가 response에서 참조:
-escrow, err := billing.HoldEscrow(billing.HoldEscrowRequest{Amount: order.Budget})
+```go
+// 첫 시퀀스에서 미참조 (err 첫 선언):
+_, err := tokenModel.Generate(key)
+
+// 이후 시퀀스에서 미참조 (err 이미 선언):
+_, err = billing.HoldEscrow(billing.HoldEscrowRequest{Amount: order.Budget})
 ```
 
 ### config.* → config.Get() 코드젠 변환
 
 SSaC에서 `config.Field` 사용 시 generator가 `config.Get("UPPER_SNAKE")` 호출로 변환한다.
+@call의 Request struct 필드 타입에 따라 타입별 변환 함수를 사용한다:
+
+| Request 필드 타입 | 생성 코드 |
+|---|---|
+| `string` (기본) | `config.Get("KEY")` |
+| `int` | `config.GetInt("KEY")` |
+| `int32` | `int32(config.GetInt("KEY"))` |
+| `int64` | `config.GetInt64("KEY")` |
+| `bool` | `config.GetBool("KEY")` |
+| 기타 | validator ERROR: 변환 불가 |
 
 ```go
 // SSaC:
-// @call mail.Send({Host: config.SMTPHost, Port: config.SMTPPort})
+// @call mail.Send({Host: config.SMTPHost, MaxRetries: config.MaxRetries, Debug: config.Debug})
 
-// 생성 코드:
-mail.Send(mail.SendRequest{Host: config.Get("SMTP_HOST"), Port: config.Get("SMTP_PORT")})
+// 생성 코드 (Request struct: Host string, MaxRetries int, Debug bool):
+mail.Send(mail.SendRequest{
+    Host: config.Get("SMTP_HOST"),
+    MaxRetries: config.GetInt("MAX_RETRIES"),
+    Debug: config.GetBool("DEBUG"),
+})
 ```
 
 PascalCase → UPPER_SNAKE_CASE 변환 규칙: 대문자 앞에 `_` 삽입 후 전체 대문자화 (연속 대문자 그룹은 하나로 유지: `SMTP` → `SMTP`).

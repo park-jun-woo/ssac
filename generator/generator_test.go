@@ -728,8 +728,8 @@ func TestGenerateUnusedVar(t *testing.T) {
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	// escrow는 response에서 미참조 → _
-	assertContains(t, code, `_, err := billing.HoldEscrow(billing.HoldEscrowRequest{`)
+	// escrow는 response에서 미참조 → _, err already declared → =
+	assertContains(t, code, `_, err = billing.HoldEscrow(billing.HoldEscrowRequest{`)
 	// order는 response에서 참조 → 변수명 유지
 	assertContains(t, code, `order, err := orderModel.FindByID`)
 }
@@ -779,6 +779,111 @@ func TestGenerateConfigGetSubscribe(t *testing.T) {
 	code := mustGenerate(t, sf, nil)
 	assertContains(t, code, `config.Get("MAIL_FROM")`)
 	assertContains(t, code, `"config"`)
+}
+
+// --- Phase023: Unused + ErrDeclared, config typed ---
+
+func TestGenerateUnusedVarErrAlreadyDeclared(t *testing.T) {
+	// 2번째 @get에서 Unused + err already declared → _, err =
+	sf := parser.ServiceFunc{
+		Name: "DoSomething", FileName: "do_something.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "User.FindByID", Inputs: map[string]string{"ID": "request.UserID"}, Result: &parser.Result{Type: "User", Var: "user"}},
+			{Type: parser.SeqGet, Model: "Token.Generate", Inputs: map[string]string{"UserID": "user.ID"}, Result: &parser.Result{Type: "Token", Var: "token"}},
+			{Type: parser.SeqResponse, Fields: map[string]string{"user": "user"}},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	// token은 미참조 + err already declared → _, err =
+	assertContains(t, code, `_, err = tokenModel.Generate(user.ID)`)
+	// user는 참조됨 → user, err :=
+	assertContains(t, code, `user, err := userModel.FindByID`)
+}
+
+func TestGenerateUnusedVarFirstErr(t *testing.T) {
+	// 첫 시퀀스에서 Unused → _, err := (err 첫 선언)
+	sf := parser.ServiceFunc{
+		Name: "DoSomething", FileName: "do_something.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Token.Generate", Inputs: map[string]string{"Key": "request.Key"}, Result: &parser.Result{Type: "Token", Var: "token"}},
+			{Type: parser.SeqResponse, Fields: map[string]string{}},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	// token은 미참조 + err 첫 선언 → _, err :=
+	assertContains(t, code, `_, err := tokenModel.Generate`)
+}
+
+func TestGenerateConfigGetInt(t *testing.T) {
+	st := &validator.SymbolTable{
+		Models: map[string]validator.ModelSymbol{
+			"billing.Billing": {
+				Methods: map[string]validator.MethodInfo{
+					"SetLimit": {
+						Params:     []string{"MaxRetries"},
+						ParamTypes: map[string]string{"MaxRetries": "int"},
+					},
+				},
+			},
+		},
+	}
+	sf := parser.ServiceFunc{
+		Name: "SetLimit", FileName: "set_limit.go",
+		Imports: []string{"myapp/billing"},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqCall, Model: "billing.SetLimit", Inputs: map[string]string{"MaxRetries": "config.MaxRetries"}},
+		},
+	}
+	code := mustGenerate(t, sf, st)
+	assertContains(t, code, `config.GetInt("MAX_RETRIES")`)
+}
+
+func TestGenerateConfigGetInt64(t *testing.T) {
+	st := &validator.SymbolTable{
+		Models: map[string]validator.ModelSymbol{
+			"billing.Billing": {
+				Methods: map[string]validator.MethodInfo{
+					"SetQuota": {
+						Params:     []string{"Quota"},
+						ParamTypes: map[string]string{"Quota": "int64"},
+					},
+				},
+			},
+		},
+	}
+	sf := parser.ServiceFunc{
+		Name: "SetQuota", FileName: "set_quota.go",
+		Imports: []string{"myapp/billing"},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqCall, Model: "billing.SetQuota", Inputs: map[string]string{"Quota": "config.MaxQuota"}},
+		},
+	}
+	code := mustGenerate(t, sf, st)
+	assertContains(t, code, `config.GetInt64("MAX_QUOTA")`)
+}
+
+func TestGenerateConfigGetBool(t *testing.T) {
+	st := &validator.SymbolTable{
+		Models: map[string]validator.ModelSymbol{
+			"mailer.Mailer": {
+				Methods: map[string]validator.MethodInfo{
+					"Configure": {
+						Params:     []string{"Debug"},
+						ParamTypes: map[string]string{"Debug": "bool"},
+					},
+				},
+			},
+		},
+	}
+	sf := parser.ServiceFunc{
+		Name: "Configure", FileName: "configure.go",
+		Imports: []string{"myapp/mailer"},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqCall, Model: "mailer.Configure", Inputs: map[string]string{"Debug": "config.DebugMode"}},
+		},
+	}
+	code := mustGenerate(t, sf, st)
+	assertContains(t, code, `config.GetBool("DEBUG_MODE")`)
 }
 
 // --- helpers ---

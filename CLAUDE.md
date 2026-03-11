@@ -69,7 +69,7 @@ Args 형식: 모든 시퀀스 타입에서 `{Key: value}` 통일 문법 사용 (
 - `message.Field` → subscribe 함수에서 큐 페이로드 접근 (HTTP 함수에서는 사용 불가)
 - `request.Field` → 코드젠에서 `lcFirst(Field)` 로컬 변수로 치환
 - `currentUser.Field` → `currentUser.Field` 실제 변수 유지
-- `config.Field` → `config.Get("UPPER_SNAKE")` 코드젠 변환 (PascalCase → UPPER_SNAKE_CASE)
+- `config.Field` → `config.Get("UPPER_SNAKE")` 코드젠 변환 (PascalCase → UPPER_SNAKE_CASE). @call 시 Request 필드 타입에 따라 `GetInt`/`GetInt64`/`GetBool` 자동 선택
 - `query` → 코드젠에서 `opts` (QueryOpts) 변수로 변환. OpenAPI x-extensions와 교차 검증
 
 파서 IR: 모든 시퀀스 타입이 `seq.Inputs` (map[string]string)을 사용. CRUD도 `seq.Args` 대신 `seq.Inputs` 사용.
@@ -155,8 +155,8 @@ files/                           # 기초 자료
 - **@publish 코드젠**: `queue.Publish(c.Request.Context(), ...)` (HTTP) / `queue.Publish(ctx, ...)` (subscribe). 옵션: `queue.WithDelay()`, `queue.WithPriority()`. import `"queue"` 자동 추가
 - **@subscribe 코드젠**: `func Name(ctx context.Context, message T) error`. 에러 → `return fmt.Errorf(...)`, 성공 → `return nil`. 메시지 타입은 .ssac 파일 내 Go struct. 검증: 파라미터 필수, 변수명 `message`, struct/필드 존재 확인
 - **@call 입력 타입 검증**: @call inputs 필드 타입을 func Request struct 필드 타입과 비교. DDL 역추적 타입 ≠ Request 타입 → ERROR
-- **미사용 변수 `_` 처리**: result 변수가 이후 시퀀스(guard target, inputs, response)에서 미참조 시 `_, err :=` 생성
-- **config.* 코드젠**: `config.SMTPHost` → `config.Get("SMTP_HOST")`. PascalCase → UPPER_SNAKE_CASE. config 참조 시 import `"config"` 자동 추가
+- **미사용 변수 `_` 처리**: result 변수가 이후 시퀀스(guard target, inputs, response)에서 미참조 시 `_` 생성. `:=` vs `=` 추적: `_` + err 이미 선언 → `_, err =` (새 변수 없음)
+- **config.* 코드젠**: `config.SMTPHost` → `config.Get("SMTP_HOST")`. PascalCase → UPPER_SNAKE_CASE. config 참조 시 import `"config"` 자동 추가. @call Request 필드 타입에 따라 `GetInt`/`GetInt64`/`GetBool` 변환. 미지원 타입 → validator ERROR
 
 ## 더미 프로젝트
 

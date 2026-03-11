@@ -1210,3 +1210,28 @@ func TestValidateGoReservedWordRange(t *testing.T) {
 	errs := ValidateWithSymbols(funcs, st)
 	assertHasError(t, errs, `DDL column "range" in table "schedules" is a Go reserved word`)
 }
+
+// --- Phase023: config unsupported type ---
+
+func TestValidateConfigUnsupportedType(t *testing.T) {
+	st := &SymbolTable{
+		Models: map[string]ModelSymbol{
+			"mailer.Mailer": {Methods: map[string]MethodInfo{
+				"Configure": {
+					Params:     []string{"Headers"},
+					ParamTypes: map[string]string{"Headers": "map[string]string"},
+				},
+			}},
+		},
+		Operations: map[string]OperationSymbol{},
+		DDLTables:  map[string]DDLTable{},
+	}
+	funcs := []parser.ServiceFunc{{
+		Name: "ConfigureMailer", FileName: "configure_mailer.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqCall, Model: "mailer.Configure", Inputs: map[string]string{"Headers": "config.DefaultHeaders"}},
+		},
+	}}
+	errs := ValidateWithSymbols(funcs, st)
+	assertHasError(t, errs, "변환할 수 없습니다")
+}

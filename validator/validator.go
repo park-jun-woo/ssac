@@ -27,6 +27,7 @@ func ValidateWithSymbols(funcs []parser.ServiceFunc, st *SymbolTable) []Validati
 		errs = append(errs, validateQueryUsage(sf, st)...)
 		errs = append(errs, validatePaginationType(sf, st)...)
 		errs = append(errs, validateCallInputTypes(sf, st)...)
+		errs = append(errs, validateConfigTypes(sf, st)...)
 	}
 	errs = append(errs, validateGoReservedWords(funcs, st)...)
 	return errs
@@ -677,6 +678,59 @@ func resolveCallInputType(val string, resultModels map[string]string, st *Symbol
 		}
 	}
 	return ""
+}
+
+// configSupportedTypes는 config.Get으로 변환 가능한 Go 타입 집합이다.
+var configSupportedTypes = map[string]bool{
+	"string": true, "int": true, "int32": true, "int64": true, "bool": true,
+}
+
+// validateConfigTypes는 @call inputs에서 config.* 값이 변환 불가능한 타입에 대입되면 ERROR를 반환한다.
+func validateConfigTypes(sf parser.ServiceFunc, st *SymbolTable) []ValidationError {
+	if st == nil {
+		return nil
+	}
+
+	var errs []ValidationError
+	for i, seq := range sf.Sequences {
+		if seq.Type != parser.SeqCall || seq.Model == "" {
+			continue
+		}
+		parts := strings.SplitN(seq.Model, ".", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		pkgName, funcName := parts[0], parts[1]
+
+		var paramTypes map[string]string
+		for modelKey, ms := range st.Models {
+			if !strings.HasPrefix(modelKey, pkgName+".") {
+				continue
+			}
+			if mi, ok := ms.Methods[funcName]; ok && mi.ParamTypes != nil {
+				paramTypes = mi.ParamTypes
+				break
+			}
+		}
+		if paramTypes == nil {
+			continue
+		}
+
+		ctx := errCtx{sf.FileName, sf.Name, i}
+		for key, val := range seq.Inputs {
+			if !strings.HasPrefix(val, "config.") {
+				continue
+			}
+			expectedType, ok := paramTypes[key]
+			if !ok {
+				continue
+			}
+			if !configSupportedTypes[expectedType] {
+				errs = append(errs, ctx.err("@call", fmt.Sprintf("config.%s는 타입 %s으로 변환할 수 없습니다", val[len("config."):], expectedType)))
+			}
+		}
+	}
+	return errs
 }
 
 // goReservedWords는 Go 예약어 25개다.

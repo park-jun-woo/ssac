@@ -116,6 +116,9 @@ func (g *GoTarget) generateHTTPFunc(sf parser.ServiceFunc, st *validator.SymbolT
 		// 미사용 변수 처리
 		if seq.Result != nil && !usedVars[seq.Result.Var] {
 			data.Unused = true
+			if data.ErrDeclared {
+				data.ReAssign = true // _, err = (no new vars with :=)
+			}
 		}
 
 		tmplName := templateName(seq)
@@ -173,6 +176,9 @@ func (g *GoTarget) generateSubscribeFunc(sf parser.ServiceFunc, st *validator.Sy
 		// 미사용 변수 처리
 		if seq.Result != nil && !usedVars[seq.Result.Var] {
 			data.Unused = true
+			if data.ErrDeclared {
+				data.ReAssign = true // _, err = (no new vars with :=)
+			}
 		}
 		tmplName := subscribeTemplateName(seq)
 		var seqBuf bytes.Buffer
@@ -319,6 +325,9 @@ type templateData struct {
 
 	// unused: result var not referenced later → use _ instead of var name
 	Unused bool
+
+	// errDeclared: err variable already declared before this sequence
+	ErrDeclared bool
 }
 
 func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[string]bool, resultTypes map[string]string, st *validator.SymbolTable, funcName string) templateData {
@@ -378,7 +387,12 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 	// Inputs → InputFields (for state, auth, call)
 	if seq.Type == parser.SeqState || seq.Type == parser.SeqAuth || seq.Type == parser.SeqCall {
 		if len(seq.Inputs) > 0 {
-			d.InputFields = buildInputFieldsFromMap(seq.Inputs)
+			var paramTypes map[string]string
+			if seq.Type == parser.SeqCall && st != nil && seq.Model != "" {
+				// @call: look up ParamTypes from symbol table
+				paramTypes = lookupCallParamTypes(seq.Model, st)
+			}
+			d.InputFields = buildInputFieldsFromMap(seq.Inputs, paramTypes)
 		}
 	}
 
@@ -399,6 +413,9 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 		}
 		declaredVars[seq.Result.Var] = true
 	}
+
+	// capture errDeclared state before this sequence modifies it
+	d.ErrDeclared = *errDeclared
 
 	// err declaration tracking
 	switch seq.Type {
@@ -480,7 +497,8 @@ func argToCode(a parser.Arg) string {
 }
 
 // buildInputFieldsFromMap은 map[string]string을 Go struct 리터럴 필드로 변환한다.
-func buildInputFieldsFromMap(inputs map[string]string) string {
+// paramTypes는 @call Request struct 필드 타입 (nil이면 타입 변환 없이 기본 string).
+func buildInputFieldsFromMap(inputs map[string]string, paramTypes map[string]string) string {
 	keys := make([]string, 0, len(inputs))
 	for k := range inputs {
 		keys = append(keys, k)
@@ -489,13 +507,18 @@ func buildInputFieldsFromMap(inputs map[string]string) string {
 
 	var fields []string
 	for _, k := range keys {
-		fields = append(fields, ucFirst(k)+": "+inputValueToCode(inputs[k]))
+		targetType := ""
+		if paramTypes != nil {
+			targetType = paramTypes[k]
+		}
+		fields = append(fields, ucFirst(k)+": "+inputValueToCode(inputs[k], targetType))
 	}
 	return strings.Join(fields, ", ")
 }
 
 // inputValueToCode는 inputs 값에 argToCode와 동일한 예약 소스 변환을 적용한다.
-func inputValueToCode(val string) string {
+// targetType은 대입 대상 필드의 Go 타입 (config 타입 변환에 사용, 빈 문자열이면 string 기본).
+func inputValueToCode(val string, targetType string) string {
 	if val == "query" {
 		return "opts"
 	}
@@ -504,7 +527,19 @@ func inputValueToCode(val string) string {
 	}
 	if strings.HasPrefix(val, "config.") {
 		key := val[len("config."):]
-		return `config.Get("` + toUpperSnake(key) + `")`
+		upperKey := toUpperSnake(key)
+		switch targetType {
+		case "int":
+			return `config.GetInt("` + upperKey + `")`
+		case "int32":
+			return `int32(config.GetInt("` + upperKey + `"))`
+		case "int64":
+			return `config.GetInt64("` + upperKey + `")`
+		case "bool":
+			return `config.GetBool("` + upperKey + `")`
+		default:
+			return `config.Get("` + upperKey + `")`
+		}
 	}
 	// currentUser.Field, 일반 변수 → 그대로
 	return val
@@ -523,7 +558,7 @@ func buildArgsCodeFromInputs(inputs map[string]string) string {
 
 	var parts []string
 	for _, k := range keys {
-		parts = append(parts, inputValueToCode(inputs[k]))
+		parts = append(parts, inputValueToCode(inputs[k], ""))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -538,7 +573,7 @@ func buildPublishPayload(inputs map[string]string) string {
 
 	var fields []string
 	for _, k := range keys {
-		fields = append(fields, fmt.Sprintf("\t\t%q: %s,", ucFirst(k), inputValueToCode(inputs[k])))
+		fields = append(fields, fmt.Sprintf("\t\t%q: %s,", ucFirst(k), inputValueToCode(inputs[k], "")))
 	}
 	return strings.Join(fields, "\n")
 }
@@ -885,6 +920,24 @@ func needsConfig(seqs []parser.Sequence) bool {
 		}
 	}
 	return false
+}
+
+// lookupCallParamTypes는 @call 시퀀스의 모델에서 ParamTypes를 조회한다.
+func lookupCallParamTypes(model string, st *validator.SymbolTable) map[string]string {
+	parts := strings.SplitN(model, ".", 2)
+	if len(parts) < 2 {
+		return nil
+	}
+	pkgName, funcName := parts[0], parts[1]
+	for modelKey, ms := range st.Models {
+		if !strings.HasPrefix(modelKey, pkgName+".") {
+			continue
+		}
+		if mi, ok := ms.Methods[funcName]; ok && mi.ParamTypes != nil {
+			return mi.ParamTypes
+		}
+	}
+	return nil
 }
 
 // toUpperSnake는 PascalCase를 UPPER_SNAKE_CASE로 변환한다.

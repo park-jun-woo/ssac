@@ -255,8 +255,9 @@ Additional features when symbol table (external SSOT) is available:
 - **@auth codegen**: `@auth "action" "resource" {inputs}` → `authz.Check(authz.CheckRequest{Action: "action", Resource: "resource", ...})` (403 Forbidden). `currentUser` auto-extracted only if inputs reference `currentUser.*`
 - **@call codegen**: `@call pkg.Func({Key: value})` → `pkg.Func(pkg.FuncRequest{Key: value, ...})`. No result → `_, err` guard-style (401), with result → value-style (500)
 - **@call input type validation**: @call inputs field types compared against func Request struct field types. DDL-traced type != Request type → ERROR
-- **Unused variable `_` handling**: Result variables not referenced in subsequent sequences (guard targets, inputs, response fields) → `_, err :=` instead of `varName, err :=`
-- **config.* codegen**: `config.SMTPHost` → `config.Get("SMTP_HOST")` (PascalCase → UPPER_SNAKE_CASE). Import `"config"` auto-added when config references exist
+- **config type validation**: `config.*` assigned to unsupported type (not string/int/int32/int64/bool) → ERROR
+- **Unused variable `_` handling**: Result variables not referenced in subsequent sequences (guard targets, inputs, response fields) → `_, err` instead of `varName, err`. `:=` vs `=`: if `err` already declared and result is `_` (no new variables) → `_, err =`; if `err` is first declaration → `_, err :=`
+- **config.* codegen**: `config.SMTPHost` → `config.Get("SMTP_HOST")` (PascalCase → UPPER_SNAKE_CASE). Import `"config"` auto-added. Type-aware conversion for @call: `int`→`config.GetInt()`, `int32`→`int32(config.GetInt())`, `int64`→`config.GetInt64()`, `bool`→`config.GetBool()`. Unsupported target types → validator ERROR
 - **Spec file imports**: Parser collects Go import declarations from spec files and passes them to generated code
 - **Package prefix model**: `pkg.Model.Method({...})` → validates against Go interface in package path. Missing interface → WARNING, missing method → ERROR with available methods list. Parameter matching: SSaC keys ↔ interface params (`context.Context` excluded). Package models skip DDL check and `models_gen.go`
 - **Go reserved word validation**: DDL column names that are Go keywords (`type`, `range`, `select`, etc.) → ERROR with table name and rename suggestion. Prevents `models_gen.go` compile errors.
@@ -301,4 +302,4 @@ Codegen effects:
 - Filenames: snake_case, variables/functions: camelCase, types: PascalCase
 - Go common initialisms: `ID`, `URL`, `HTTP`, `API` etc. — all-caps (exported) or all-lowercase (unexported first word)
 - Tests: `go test ./parser/... ./validator/... ./generator/... -count=1`
-- 148 tests: parser 41 + validator 65 + generator 42
+- 163 tests: parser 41 + validator 75 + generator 47
