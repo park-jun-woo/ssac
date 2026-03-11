@@ -171,8 +171,18 @@ func parseLine(line string) (*Sequence, bool, error) {
 		if trimmed == "{" {
 			return nil, true, nil
 		}
+		// 단일 행 구조체: @response { field: var, ... }
+		if strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {
+			inner := trimmed[1 : len(trimmed)-1]
+			lines := strings.Split(inner, ",")
+			return &Sequence{
+				Type:         SeqResponse,
+				Fields:       parseResponseFields(lines),
+				SuppressWarn: suppressWarn,
+			}, false, nil
+		}
 		// @response 간단쓰기: @response varName
-		if trimmed != "" && trimmed != "{" {
+		if trimmed != "" {
 			return &Sequence{
 				Type:         SeqResponse,
 				Target:       trimmed,
