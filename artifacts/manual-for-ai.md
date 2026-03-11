@@ -130,13 +130,23 @@ Target: variable (`course`) or variable.field (`course.InstructorID`)
 ### Subscribe — Queue Event Trigger
 
 ```go
-// @subscribe "topic"
+type OnOrderCompletedMessage struct {
+    OrderID int64
+    Email   string
+}
+
+// @subscribe "order.completed" OnOrderCompletedMessage
+// @get Order order = Order.FindByID({ID: message.OrderID})
+func OnOrderCompleted(message OnOrderCompletedMessage) {}
 ```
 
 - Function-level trigger (not a sequence). First annotation before sequences.
+- Message type: Go struct declared in same .ssac file (parsed via `go/ast`)
+- Function signature: `func Name(message TypeName) {}` — param name must be `message`
 - `message` replaces `request` as input source: `message.OrderID`, `message.Email`
-- Validation: no `@response` in subscribe func, no `request` usage, no `message` in HTTP func.
-- Parser IR: `ServiceFunc.Subscribe = &SubscribeInfo{Topic: "..."}` (nil = HTTP trigger)
+- Validation: no `@response`, no `request` usage, no `message` in HTTP func, param required, struct type exists, field exists
+- Parser IR: `ServiceFunc.Subscribe = &SubscribeInfo{Topic: "...", MessageType: "..."}`, `ServiceFunc.Param = &ParamInfo{...}`, `ServiceFunc.Structs = [...]`
+- Codegen: `func Name(ctx context.Context, message T) error` — not gin handler. Errors → `return fmt.Errorf(...)`, success → `return nil`
 
 ### Response — Field Mapping Block
 
@@ -247,8 +257,9 @@ Additional features when symbol table (external SSOT) is available:
 - **Spec file imports**: Parser collects Go import declarations from spec files and passes them to generated code
 - **Package prefix model**: `pkg.Model.Method({...})` → validates against Go interface in package path. Missing interface → WARNING, missing method → ERROR with available methods list. Parameter matching: SSaC keys ↔ interface params (`context.Context` excluded). Package models skip DDL check and `models_gen.go`
 - **Go reserved word validation**: DDL column names that are Go keywords (`type`, `range`, `select`, etc.) → ERROR with table name and rename suggestion. Prevents `models_gen.go` compile errors.
-- **@publish codegen**: `@publish "topic" {payload}` → `queue.Publish(c.Request.Context(), "topic", map[string]any{...})`. Options: `queue.WithDelay()`, `queue.WithPriority()`. Import `"queue"` auto-added.
-- **@subscribe trigger**: Function-level `@subscribe "topic"` sets `ServiceFunc.Subscribe`. `message` is pre-declared variable (like `request` for HTTP). Subscribe funcs cannot use `@response` or `request`.
+- **@publish codegen**: `@publish "topic" {payload}` → `queue.Publish(c.Request.Context(), "topic", map[string]any{...})` (HTTP) or `queue.Publish(ctx, ...)` (subscribe). Options: `queue.WithDelay()`, `queue.WithPriority()`. Import `"queue"` auto-added.
+- **@subscribe codegen**: `func Name(ctx context.Context, message T) error`. Errors → `return fmt.Errorf(...)`, success → `return nil`. No gin dependency. Message type is Go struct in same .ssac file.
+- **Subscribe validation**: param required, param name must be `message`, MessageType must exist as struct, `message.Field` must exist in struct. No `@response`, no `request` usage.
 
 Singularization rules (sqlc filename → model name): `ies`→`y`, `sses`→`ss`, `xes`→`x`, otherwise remove trailing `s`
 
@@ -287,4 +298,4 @@ Codegen effects:
 - Filenames: snake_case, variables/functions: camelCase, types: PascalCase
 - Go common initialisms: `ID`, `URL`, `HTTP`, `API` etc. — all-caps (exported) or all-lowercase (unexported first word)
 - Tests: `go test ./parser/... ./validator/... ./generator/... -count=1`
-- 135 tests: parser 37 + validator 67 + generator 31
+- 146 tests: parser 39 + validator 72 + generator 35

@@ -50,7 +50,7 @@ ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블
 // @auth "action" "resource" {inputs} "message"             — 권한 검사 (403)
 // @call Type var = pkg.Func({Key: value, ...})             — 외부 함수 호출 (result 있음/없음)
 // @publish "topic" {Key: value, ...}                       — 이벤트 발행 (옵션: {delay: 1800})
-// @subscribe "topic"                                       — 큐 이벤트 트리거 (함수 메타, 시퀀스 아님)
+// @subscribe "topic" TypeName                              — 큐 이벤트 트리거 (Go struct 타입, func Name(message T) {})
 // @response { field: var, field: var.Member }              — 응답 (멀티라인 블록)
 // @response varName                                        — 응답 간단쓰기 (직접 반환)
 // @type! — 모든 시퀀스에 ! 접미사로 WARNING 억제 (e.g. @delete!, @response!)
@@ -152,8 +152,8 @@ files/                           # 기초 자료
 - **@auth 코드젠**: `authz.Check(currentUser, "action", "resource", authz.Input{...})`
 - **Spec 파일 imports**: spec 파일의 Go import 선언이 생성 코드에 전달됨
 - **패키지 접두사 모델**: `pkg.Model.Method({...})` — 소문자 접두사 → 패키지 Go interface 교차 검증. interface 없으면 WARNING, 메서드 없으면 ERROR + 사용 가능 목록. 파라미터 매칭: SSaC keys ↔ interface params (`context.Context` 제외). `models_gen.go` 제외. `Sequence.Package` 필드로 추적
-- **@publish 코드젠**: `queue.Publish(c.Request.Context(), "topic", map[string]any{...})`. 옵션: `queue.WithDelay()`, `queue.WithPriority()`. import `"queue"` 자동 추가
-- **@subscribe 트리거**: `ServiceFunc.Subscribe` 필드. `message` 예약 변수 (subscribe 함수 전용). subscribe 함수는 `@response` 불가, `request` 불가. HTTP 함수에서 `message` 불가
+- **@publish 코드젠**: `queue.Publish(c.Request.Context(), ...)` (HTTP) / `queue.Publish(ctx, ...)` (subscribe). 옵션: `queue.WithDelay()`, `queue.WithPriority()`. import `"queue"` 자동 추가
+- **@subscribe 코드젠**: `func Name(ctx context.Context, message T) error`. 에러 → `return fmt.Errorf(...)`, 성공 → `return nil`. 메시지 타입은 .ssac 파일 내 Go struct. 검증: 파라미터 필수, 변수명 `message`, struct/필드 존재 확인
 
 ## 더미 프로젝트
 

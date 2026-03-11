@@ -81,11 +81,11 @@ func CreateSession(c *gin.Context) {
 | `publish` | `@publish "topic" {Key: value} [{options}]` | Async event publishing |
 | `response` | `@response { field: var }` or `@response var` | Return response (block or shorthand) |
 | **Trigger** | | |
-| `subscribe` | `@subscribe "topic"` | Queue event trigger (function-level, not a sequence) |
+| `subscribe` | `@subscribe "topic" TypeName` | Queue event trigger (function-level, typed message) |
 
 All sequence types use unified `{Key: value}` syntax. Value format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`), `query` (QueryOpts), or `"literal"`. Result types support generic wrappers: `Page[T]` (offset pagination), `Cursor[T]` (cursor pagination).
 
-Reserved sources (`request`, `currentUser`, `config`, `query`, `message`) cannot be used as result variable names. `message` is the queue equivalent of `request` — used in `@subscribe` functions only. Append `!` to any type to suppress WARNINGs (e.g. `@delete!`, `@response!`).
+Reserved sources (`request`, `currentUser`, `config`, `query`, `message`) cannot be used as result variable names. `message` is the queue equivalent of `request` — used in `@subscribe` functions only, typed via Go struct in .ssac file. Function signature: `func Name(message TypeName) {}`. Append `!` to any type to suppress WARNINGs (e.g. `@delete!`, `@response!`).
 
 ## Install & Run
 
@@ -147,7 +147,7 @@ When external SSOT (symbol table) is available, `ssac gen` adds:
 - **Spec file imports**: Go import declarations in spec files are passed to generated code
 - **Package prefix model**: `pkg.Model.Method({...})` — non-DDL models validated against Go interface. Missing interface → WARNING, missing method → ERROR with available methods. Parameter matching: SSaC keys ↔ interface params (`context.Context` excluded). Excluded from `models_gen.go`
 - **@publish codegen**: `queue.Publish(c.Request.Context(), "topic", map[string]any{...})`. Options: `queue.WithDelay()`, `queue.WithPriority()`. Import `"queue"` auto-added
-- **@subscribe trigger**: Function-level `@subscribe "topic"` sets `ServiceFunc.Subscribe`. `message` is pre-declared variable. Subscribe funcs cannot use `@response` or `request`; HTTP funcs cannot use `message`
+- **@subscribe codegen**: `func Name(ctx context.Context, message T) error` — separate from gin handler. Message type is Go struct in .ssac file. Errors → `return fmt.Errorf(...)`. Validation: param required, struct/field existence checked
 
 ## OpenAPI x- Extensions
 
@@ -211,7 +211,7 @@ files/                           # Design documents
 go test ./parser/... ./validator/... ./generator/... -count=1
 ```
 
-135 tests: parser 37 + validator 67 + generator 31
+146 tests: parser 39 + validator 72 + generator 35
 
 ## License
 

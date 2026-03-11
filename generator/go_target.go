@@ -21,6 +21,14 @@ func (g *GoTarget) FileExtension() string { return ".go" }
 
 // GenerateFunc는 단일 ServiceFunc의 Go 코드를 생성한다.
 func (g *GoTarget) GenerateFunc(sf parser.ServiceFunc, st *validator.SymbolTable) ([]byte, error) {
+	if sf.Subscribe != nil {
+		return g.generateSubscribeFunc(sf, st)
+	}
+	return g.generateHTTPFunc(sf, st)
+}
+
+// generateHTTPFunc는 HTTP 핸들러 함수를 생성한다.
+func (g *GoTarget) generateHTTPFunc(sf parser.ServiceFunc, st *validator.SymbolTable) ([]byte, error) {
 	var buf bytes.Buffer
 
 	// 분석
@@ -121,6 +129,113 @@ func (g *GoTarget) GenerateFunc(sf parser.ServiceFunc, st *validator.SymbolTable
 		return buf.Bytes(), fmt.Errorf("gofmt 실패: %w\n--- raw ---\n%s", err, buf.String())
 	}
 	return formatted, nil
+}
+
+// generateSubscribeFunc는 큐 구독 핸들러 함수를 생성한다.
+func (g *GoTarget) generateSubscribeFunc(sf parser.ServiceFunc, st *validator.SymbolTable) ([]byte, error) {
+	var buf bytes.Buffer
+
+	pkgName := "service"
+	if sf.Domain != "" {
+		pkgName = sf.Domain
+	}
+	buf.WriteString("package " + pkgName + "\n\n")
+
+	imports := collectSubscribeImports(sf)
+	if len(imports) > 0 {
+		buf.WriteString("import (\n")
+		for _, imp := range imports {
+			fmt.Fprintf(&buf, "\t%q\n", imp)
+		}
+		buf.WriteString(")\n\n")
+	}
+
+	msgType := sf.Subscribe.MessageType
+	fmt.Fprintf(&buf, "func %s(ctx context.Context, message %s) error {\n", sf.Name, msgType)
+
+	resultTypes := map[string]string{}
+	for _, seq := range sf.Sequences {
+		if seq.Result != nil {
+			resultTypes[seq.Result.Var] = seq.Result.Type
+		}
+	}
+
+	errDeclared := false
+	declaredVars := map[string]bool{}
+	for i, seq := range sf.Sequences {
+		data := buildTemplateData(seq, &errDeclared, declaredVars, resultTypes, st, sf.Name)
+		tmplName := subscribeTemplateName(seq)
+		var seqBuf bytes.Buffer
+		if err := goTemplates.ExecuteTemplate(&seqBuf, tmplName, data); err != nil {
+			return nil, fmt.Errorf("sequence[%d] %s 템플릿 실행 실패: %w", i, seq.Type, err)
+		}
+		buf.Write(seqBuf.Bytes())
+		buf.WriteString("\n")
+	}
+
+	buf.WriteString("\treturn nil\n")
+	buf.WriteString("}\n")
+
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return buf.Bytes(), fmt.Errorf("gofmt 실패: %w\n--- raw ---\n%s", err, buf.String())
+	}
+	return formatted, nil
+}
+
+// subscribeTemplateName은 subscribe 함수 내 시퀀스의 템플릿 이름을 반환한다.
+func subscribeTemplateName(seq parser.Sequence) string {
+	switch seq.Type {
+	case parser.SeqCall:
+		if seq.Result != nil {
+			return "sub_call_with_result"
+		}
+		return "sub_call_no_result"
+	case parser.SeqPublish:
+		return "sub_publish"
+	default:
+		return "sub_" + seq.Type
+	}
+}
+
+// collectSubscribeImports는 subscribe 함수에 필요한 import를 수집한다.
+func collectSubscribeImports(sf parser.ServiceFunc) []string {
+	seen := map[string]bool{
+		"context": true,
+		"fmt":     true,
+	}
+	for _, seq := range sf.Sequences {
+		if seq.Type == parser.SeqState {
+			seen["states/"+seq.DiagramID+"state"] = true
+		}
+		if seq.Type == parser.SeqAuth {
+			seen["authz"] = true
+		}
+		if seq.Type == parser.SeqPublish {
+			seen["queue"] = true
+		}
+	}
+	if needsCurrentUser(sf.Sequences) {
+		seen["model"] = true
+	}
+	for _, imp := range sf.Imports {
+		seen[imp] = true
+	}
+	var imports []string
+	order := []string{"context", "fmt"}
+	for _, imp := range order {
+		if seen[imp] {
+			imports = append(imports, imp)
+			delete(seen, imp)
+		}
+	}
+	var dynamic []string
+	for imp := range seen {
+		dynamic = append(dynamic, imp)
+	}
+	sort.Strings(dynamic)
+	imports = append(imports, dynamic...)
+	return imports
 }
 
 // GenerateModelInterfaces는 심볼 테이블과 SSaC spec을 교차하여 Model interface를 생성한다.

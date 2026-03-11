@@ -952,7 +952,9 @@ func TestValidatePublishPayloadMissing(t *testing.T) {
 func TestValidateSubscribeWithResponse(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "OnOrder", FileName: "on_order.go",
-		Subscribe: &parser.SubscribeInfo{Topic: "order.completed"},
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed", MessageType: "Msg"},
+		Param:     &parser.ParamInfo{TypeName: "Msg", VarName: "message"},
+		Structs:   []parser.StructInfo{{Name: "Msg", Fields: []parser.StructField{{Name: "OrderID", Type: "int64"}}}},
 		Sequences: []parser.Sequence{
 			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
 			{Type: parser.SeqResponse, Fields: map[string]string{"order": "order"}},
@@ -965,7 +967,9 @@ func TestValidateSubscribeWithResponse(t *testing.T) {
 func TestValidateSubscribeWithRequest(t *testing.T) {
 	funcs := []parser.ServiceFunc{{
 		Name: "OnOrder", FileName: "on_order.go",
-		Subscribe: &parser.SubscribeInfo{Topic: "order.completed"},
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed", MessageType: "Msg"},
+		Param:     &parser.ParamInfo{TypeName: "Msg", VarName: "message"},
+		Structs:   []parser.StructInfo{{Name: "Msg", Fields: []parser.StructField{{Name: "OrderID", Type: "int64"}}}},
 		Sequences: []parser.Sequence{
 			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "request.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
 		},
@@ -1001,7 +1005,9 @@ func TestValidateSubscribeMessageVariable(t *testing.T) {
 	// subscribe 함수에서 message는 선언 없이 사용 가능
 	funcs := []parser.ServiceFunc{{
 		Name: "OnOrder", FileName: "on_order.go",
-		Subscribe: &parser.SubscribeInfo{Topic: "order.completed"},
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed", MessageType: "Msg"},
+		Param:     &parser.ParamInfo{TypeName: "Msg", VarName: "message"},
+		Structs:   []parser.StructInfo{{Name: "Msg", Fields: []parser.StructField{{Name: "OrderID", Type: "int64"}}}},
 		Sequences: []parser.Sequence{
 			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
 		},
@@ -1010,6 +1016,81 @@ func TestValidateSubscribeMessageVariable(t *testing.T) {
 	for _, e := range errs {
 		if contains(e.Message, `"message" 변수가 아직 선언되지 않았습니다`) {
 			t.Errorf("message should be pre-declared in subscribe func: %s", e.Message)
+		}
+	}
+}
+
+func TestValidateSubscribeNoParam(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "OnOrder", FileName: "on_order.go",
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed", MessageType: "Msg"},
+		Structs:   []parser.StructInfo{{Name: "Msg", Fields: []parser.StructField{{Name: "OrderID", Type: "int64"}}}},
+		// Param nil — 파라미터 누락
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "@subscribe 함수에 파라미터가 필요합니다")
+}
+
+func TestValidateSubscribeWrongVarName(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "OnOrder", FileName: "on_order.go",
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed", MessageType: "Msg"},
+		Param:     &parser.ParamInfo{TypeName: "Msg", VarName: "msg"},
+		Structs:   []parser.StructInfo{{Name: "Msg", Fields: []parser.StructField{{Name: "OrderID", Type: "int64"}}}},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "파라미터 변수명은 \"message\"여야 합니다")
+}
+
+func TestValidateSubscribeTypeNotFound(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "OnOrder", FileName: "on_order.go",
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed", MessageType: "NonExistentMsg"},
+		Param:     &parser.ParamInfo{TypeName: "NonExistentMsg", VarName: "message"},
+		Structs:   []parser.StructInfo{}, // struct 없음
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "struct로 선언되지 않았습니다")
+}
+
+func TestValidateSubscribeFieldNotFound(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "OnOrder", FileName: "on_order.go",
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed", MessageType: "Msg"},
+		Param:     &parser.ParamInfo{TypeName: "Msg", VarName: "message"},
+		Structs:   []parser.StructInfo{{Name: "Msg", Fields: []parser.StructField{{Name: "OrderID", Type: "int64"}}}},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.Email"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "메시지 타입 \"Msg\"에 \"Email\" 필드가 없습니다")
+}
+
+func TestValidateSubscribeFieldOK(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "OnOrder", FileName: "on_order.go",
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed", MessageType: "Msg"},
+		Param:     &parser.ParamInfo{TypeName: "Msg", VarName: "message"},
+		Structs:   []parser.StructInfo{{Name: "Msg", Fields: []parser.StructField{{Name: "OrderID", Type: "int64"}, {Name: "Email", Type: "string"}}}},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+			{Type: parser.SeqPut, Model: "Order.Update", Inputs: map[string]string{"Email": "message.Email"}},
+		},
+	}}
+	errs := Validate(funcs)
+	for _, e := range errs {
+		if contains(e.Message, "필드가 없습니다") {
+			t.Errorf("unexpected field error: %s", e.Message)
 		}
 	}
 }

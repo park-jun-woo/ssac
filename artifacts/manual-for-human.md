@@ -419,33 +419,60 @@ queue.Publish(c.Request.Context(), "cart.abandoned", map[string]any{
 ### @subscribe — 큐 이벤트 트리거
 
 ```go
-// @subscribe "{topic}"
+// @subscribe "{topic}" {TypeName}
 ```
 
 함수 레벨 트리거. HTTP 트리거 대신 큐 이벤트를 수신하여 함수를 실행한다.
-함수 본문의 첫 번째 어노테이션으로 선언하고, 이후 시퀀스는 기존과 동일하다.
+메시지 타입은 같은 .ssac 파일에 Go struct로 선언한다. 함수 시그니처에도 타입을 명시한다.
 
 ```go
-// @subscribe "order.completed"
+type OnOrderCompletedMessage struct {
+    OrderID int64
+    Email   string
+    Amount  int64
+}
+
+// @subscribe "order.completed" OnOrderCompletedMessage
 // @get Order order = Order.FindByID({ID: message.OrderID})
 // @call mail.SendEmail({To: message.Email, Subject: "주문 완료"})
 // @put Order.UpdateNotified({ID: order.ID, Notified: "true"})
-func OnOrderCompleted() {}
+func OnOrderCompleted(message OnOrderCompletedMessage) {}
 ```
+
+코드젠 결과 (HTTP 핸들러와 다름):
+
+```go
+func OnOrderCompleted(ctx context.Context, message OnOrderCompletedMessage) error {
+    order, err := orderModel.FindByID(message.OrderID)
+    if err != nil {
+        return fmt.Errorf("Order 조회 실패: %w", err)
+    }
+    // ...
+    return nil
+}
+```
+
+| 항목 | HTTP 함수 | Subscribe 함수 |
+|---|---|---|
+| 시그니처 | `func(c *gin.Context)` | `func(ctx context.Context, message T) error` |
+| 입력 | `request` (gin binding) | `message` (함수 파라미터) |
+| 출력 | `c.JSON()` | `return error` |
+| 에러 처리 | `c.JSON(500, ...)` + `return` | `return fmt.Errorf(...)` |
+| @publish ctx | `c.Request.Context()` | `ctx` |
 
 입력 변수 `message`:
 - HTTP 트리거에서 `request`를 쓰듯, 구독 트리거에서는 `message`를 사용한다
 - `message.OrderID`, `message.Email` 형태로 페이로드 필드에 접근
-
-| 트리거 | 입력 변수 |
-|---|---|
-| HTTP | `request` |
-| Queue | `message` |
+- 필드 존재 여부는 struct 정의를 기반으로 검증한다
 
 검증 규칙:
 
 | 규칙 | Level |
 |---|---|
+| `@subscribe` 함수에 파라미터 없음 | ERROR |
+| 파라미터 변수명이 `message`가 아님 | ERROR |
+| 메시지 타입이 파일 내 struct로 없음 | ERROR |
+| `message.X`의 X가 struct 필드에 없음 | ERROR |
 | `@subscribe` 함수에 `@response` 사용 | ERROR |
 | `@subscribe` 함수에서 `request` 사용 | ERROR |
 | HTTP 함수에서 `message` 사용 | ERROR |

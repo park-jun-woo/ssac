@@ -632,9 +632,13 @@ func AbandonCart() {}
 func TestParseSubscribe(t *testing.T) {
 	src := `package service
 
-// @subscribe "order.completed"
+type OnOrderCompletedMessage struct {
+	OrderID int64
+}
+
+// @subscribe "order.completed" OnOrderCompletedMessage
 // @get Order order = Order.FindByID({ID: message.OrderID})
-func OnOrderCompleted() {}
+func OnOrderCompleted(message OnOrderCompletedMessage) {}
 `
 	sfs := parseTestFile(t, src)
 	sf := sfs[0]
@@ -642,6 +646,7 @@ func OnOrderCompleted() {}
 		t.Fatal("expected Subscribe to be set")
 	}
 	assertEqual(t, "Subscribe.Topic", sf.Subscribe.Topic, "order.completed")
+	assertEqual(t, "Subscribe.MessageType", sf.Subscribe.MessageType, "OnOrderCompletedMessage")
 	// @subscribe는 시퀀스에 포함되지 않아야 함
 	if len(sf.Sequences) != 1 {
 		t.Fatalf("expected 1 sequence (subscribe filtered), got %d", len(sf.Sequences))
@@ -652,11 +657,16 @@ func OnOrderCompleted() {}
 func TestParseSubscribeWithSequences(t *testing.T) {
 	src := `package service
 
-// @subscribe "order.completed"
+type OnOrderCompletedMessage struct {
+	OrderID int64
+	Email   string
+}
+
+// @subscribe "order.completed" OnOrderCompletedMessage
 // @get Order order = Order.FindByID({ID: message.OrderID})
 // @call mail.SendEmail({To: message.Email, Subject: "done"})
 // @put Order.UpdateNotified({ID: order.ID, Notified: "true"})
-func OnOrderCompleted() {}
+func OnOrderCompleted(message OnOrderCompletedMessage) {}
 `
 	sfs := parseTestFile(t, src)
 	sf := sfs[0]
@@ -664,12 +674,62 @@ func OnOrderCompleted() {}
 		t.Fatal("expected Subscribe to be set")
 	}
 	assertEqual(t, "Subscribe.Topic", sf.Subscribe.Topic, "order.completed")
+	assertEqual(t, "Subscribe.MessageType", sf.Subscribe.MessageType, "OnOrderCompletedMessage")
 	if len(sf.Sequences) != 3 {
 		t.Fatalf("expected 3 sequences, got %d", len(sf.Sequences))
 	}
 	assertEqual(t, "seq0.Type", sf.Sequences[0].Type, SeqGet)
 	assertEqual(t, "seq1.Type", sf.Sequences[1].Type, SeqCall)
 	assertEqual(t, "seq2.Type", sf.Sequences[2].Type, SeqPut)
+}
+
+func TestParseSubscribeParam(t *testing.T) {
+	src := `package service
+
+type MyMsg struct {
+	ID int64
+}
+
+// @subscribe "test.topic" MyMsg
+// @get Order order = Order.FindByID({ID: message.ID})
+func OnTest(message MyMsg) {}
+`
+	sfs := parseTestFile(t, src)
+	sf := sfs[0]
+	if sf.Param == nil {
+		t.Fatal("expected Param to be set")
+	}
+	assertEqual(t, "Param.TypeName", sf.Param.TypeName, "MyMsg")
+	assertEqual(t, "Param.VarName", sf.Param.VarName, "message")
+}
+
+func TestParseStructs(t *testing.T) {
+	src := `package service
+
+type OnOrderCompletedMessage struct {
+	OrderID int64
+	Email   string
+	Amount  int64
+}
+
+// @subscribe "order.completed" OnOrderCompletedMessage
+// @get Order order = Order.FindByID({ID: message.OrderID})
+func OnOrderCompleted(message OnOrderCompletedMessage) {}
+`
+	sfs := parseTestFile(t, src)
+	sf := sfs[0]
+	if len(sf.Structs) != 1 {
+		t.Fatalf("expected 1 struct, got %d", len(sf.Structs))
+	}
+	si := sf.Structs[0]
+	assertEqual(t, "Struct.Name", si.Name, "OnOrderCompletedMessage")
+	if len(si.Fields) != 3 {
+		t.Fatalf("expected 3 fields, got %d", len(si.Fields))
+	}
+	assertEqual(t, "Field0.Name", si.Fields[0].Name, "OrderID")
+	assertEqual(t, "Field0.Type", si.Fields[0].Type, "int64")
+	assertEqual(t, "Field1.Name", si.Fields[1].Name, "Email")
+	assertEqual(t, "Field1.Type", si.Fields[1].Type, "string")
 }
 
 // --- 패키지 접두사 모델 ---

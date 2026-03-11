@@ -44,6 +44,7 @@ func ParseFile(path string) ([]ServiceFunc, error) {
 	}
 
 	imports := collectImports(f)
+	structs := collectStructs(f)
 	var funcs []ServiceFunc
 
 	for _, decl := range f.Decls {
@@ -72,13 +73,29 @@ func ParseFile(path string) ([]ServiceFunc, error) {
 			Name:     fn.Name.Name,
 			FileName: filepath.Base(path),
 			Imports:  imports,
+			Structs:  structs,
+		}
+
+		// 함수 파라미터 추출
+		if fn.Type.Params != nil {
+			for _, param := range fn.Type.Params.List {
+				if len(param.Names) > 0 {
+					sf.Param = &ParamInfo{
+						TypeName: exprToString(param.Type),
+						VarName:  param.Names[0].Name,
+					}
+				}
+			}
 		}
 
 		// @subscribe 추출: 시퀀스가 아닌 함수 메타데이터
 		var filtered []Sequence
 		for _, seq := range sequences {
 			if seq.Type == "subscribe" {
-				sf.Subscribe = &SubscribeInfo{Topic: seq.Topic}
+				sf.Subscribe = &SubscribeInfo{
+					Topic:       seq.Topic,
+					MessageType: seq.Target,
+				}
 				continue
 			}
 			filtered = append(filtered, seq)
@@ -195,8 +212,10 @@ func parseLine(line string) (*Sequence, bool, error) {
 	case strings.HasPrefix(line, "@publish "):
 		seq, err = parsePublish(line[9:])
 	case strings.HasPrefix(line, "@subscribe "):
-		topic, _ := extractQuoted(line[11:])
-		seq = &Sequence{Type: "subscribe", Topic: topic}
+		rest := strings.TrimSpace(line[11:])
+		topic, rest := extractQuoted(rest)
+		msgType := strings.TrimSpace(rest)
+		seq = &Sequence{Type: "subscribe", Topic: topic, Target: msgType}
 	case strings.HasPrefix(line, "@call "):
 		seq, err = parseCall(line[6:])
 	default:
@@ -595,6 +614,50 @@ func splitPackagePrefix(model string) (pkg, rest string) {
 	}
 	// If first part starts with uppercase, it's not a package prefix
 	return "", model
+}
+
+// exprToString은 AST 표현식을 문자열로 변환한다.
+func exprToString(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		return exprToString(t.X) + "." + t.Sel.Name
+	default:
+		return ""
+	}
+}
+
+// collectStructs는 AST에서 struct 선언을 수집한다.
+func collectStructs(f *ast.File) []StructInfo {
+	var structs []StructInfo
+	for _, decl := range f.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			ts, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+			st, ok := ts.Type.(*ast.StructType)
+			if !ok {
+				continue
+			}
+			si := StructInfo{Name: ts.Name.Name}
+			for _, field := range st.Fields.List {
+				if len(field.Names) > 0 {
+					si.Fields = append(si.Fields, StructField{
+						Name: field.Names[0].Name,
+						Type: exprToString(field.Type),
+					})
+				}
+			}
+			structs = append(structs, si)
+		}
+	}
+	return structs
 }
 
 // collectImports는 AST에서 import 경로를 수집한다.

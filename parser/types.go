@@ -8,11 +8,32 @@ type ServiceFunc struct {
 	Sequences []Sequence     // 시퀀스 목록
 	Imports   []string       // Go import 경로
 	Subscribe *SubscribeInfo // nil이면 HTTP 트리거
+	Param     *ParamInfo     // 함수 파라미터 (subscribe 함수용)
+	Structs   []StructInfo   // .ssac 파일에 선언된 Go struct 목록
 }
 
 // SubscribeInfo는 큐 구독 트리거 정보다.
 type SubscribeInfo struct {
-	Topic string // "order.completed"
+	Topic       string // "order.completed"
+	MessageType string // "OnOrderCompletedMessage"
+}
+
+// ParamInfo는 함수 파라미터 정보다.
+type ParamInfo struct {
+	TypeName string // "OnOrderCompletedMessage"
+	VarName  string // "message"
+}
+
+// StructInfo는 .ssac 파일에 선언된 Go struct 정보다.
+type StructInfo struct {
+	Name   string        // "OnOrderCompletedMessage"
+	Fields []StructField
+}
+
+// StructField는 struct 필드 정보다.
+type StructField struct {
+	Name string // "OrderID"
+	Type string // "int64"
 }
 
 // Sequence는 하나의 시퀀스 라인이다.
