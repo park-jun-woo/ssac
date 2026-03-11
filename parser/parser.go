@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -262,7 +263,7 @@ func parseCRUD(seqType, rest string, hasResult bool) (*Sequence, error) {
 		}
 		seq.Result = result
 
-		model, inputs, err := parseCallExprInputs(rhs)
+		model, inputs, _, err := parseCallExprInputs(rhs)
 		if err != nil {
 			return nil, err
 		}
@@ -270,7 +271,7 @@ func parseCRUD(seqType, rest string, hasResult bool) (*Sequence, error) {
 		seq.Inputs = inputs
 	} else {
 		// Model.Method({Key: val, ...})
-		model, inputs, err := parseCallExprInputs(rest)
+		model, inputs, _, err := parseCallExprInputs(rest)
 		if err != nil {
 			return nil, err
 		}
@@ -362,6 +363,7 @@ func parseCall(rest string) (*Sequence, error) {
 	seq := &Sequence{Type: SeqCall}
 
 	// = 가 있고, 그 전에 ( 가 없으면 result 있는 형태
+	var remainder string
 	eqIdx := strings.Index(rest, "=")
 	parenIdx := strings.Index(rest, "(")
 	if eqIdx > 0 && (parenIdx < 0 || eqIdx < parenIdx) {
@@ -374,19 +376,28 @@ func parseCall(rest string) (*Sequence, error) {
 		}
 		seq.Result = result
 
-		model, inputs, err := parseCallExprInputs(rhs)
+		model, inputs, rem, err := parseCallExprInputs(rhs)
 		if err != nil {
 			return nil, err
 		}
 		seq.Model = model
 		seq.Inputs = inputs
+		remainder = rem
 	} else {
-		model, inputs, err := parseCallExprInputs(rest)
+		model, inputs, rem, err := parseCallExprInputs(rest)
 		if err != nil {
 			return nil, err
 		}
 		seq.Model = model
 		seq.Inputs = inputs
+		remainder = rem
+	}
+
+	// trailing HTTP status code (e.g. "401")
+	if remainder != "" {
+		if code, err := strconv.Atoi(remainder); err == nil && code >= 100 && code <= 599 {
+			seq.ErrStatus = code
+		}
 	}
 
 	return seq, nil
@@ -418,22 +429,28 @@ func parsePublish(rest string) (*Sequence, error) {
 	}, nil
 }
 
-// parseCallExprInputs는 "pkg.Func({Key: val, ...})"를 파싱한다.
-func parseCallExprInputs(expr string) (string, map[string]string, error) {
+// parseCallExprInputs는 "pkg.Func({Key: val, ...}) remainder"를 파싱한다.
+// 닫는 괄호 뒤의 remainder도 반환한다.
+func parseCallExprInputs(expr string) (string, map[string]string, string, error) {
 	expr = strings.TrimSpace(expr)
 	parenIdx := strings.Index(expr, "(")
 	if parenIdx < 0 {
-		return expr, nil, nil
+		return expr, nil, "", nil
 	}
 	model := expr[:parenIdx]
-	inner := expr[parenIdx+1:]
-	inner = strings.TrimSuffix(strings.TrimSpace(inner), ")")
-	inner = strings.TrimSpace(inner)
+	afterParen := expr[parenIdx+1:]
+	// 마지막 ) 찾기
+	closeIdx := strings.LastIndex(afterParen, ")")
+	if closeIdx < 0 {
+		return model, nil, "", nil
+	}
+	inner := strings.TrimSpace(afterParen[:closeIdx])
+	remainder := strings.TrimSpace(afterParen[closeIdx+1:])
 	if inner == "" {
-		return model, nil, nil
+		return model, nil, remainder, nil
 	}
 	inputs, err := parseInputs(inner)
-	return model, inputs, err
+	return model, inputs, remainder, err
 }
 
 // parseResult는 "Type var" 또는 "[]Type var"를 파싱한다.

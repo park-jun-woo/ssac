@@ -146,7 +146,19 @@ func TestGenerateCallWithoutResult(t *testing.T) {
 	assertContains(t, code, `ID: reservation.ID`)
 	assertContains(t, code, `Status: "cancelled"`)
 	assertContains(t, code, `_, err :=`)
+	assertContains(t, code, `http.StatusInternalServerError`)
+}
+
+func TestGenerateCallErrStatus(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name: "Login", FileName: "login.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqCall, Model: "auth.VerifyPassword", Inputs: map[string]string{"Email": "request.Email", "Password": "request.Password"}, ErrStatus: 401},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
 	assertContains(t, code, `http.StatusUnauthorized`)
+	assertNotContains(t, code, `http.StatusInternalServerError`)
 }
 
 func TestGenerateCallBareVariable(t *testing.T) {

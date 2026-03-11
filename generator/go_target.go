@@ -307,6 +307,7 @@ type templateData struct {
 	// call
 	PkgName    string
 	FuncMethod string
+	ErrStatus  string // "http.StatusInternalServerError", "http.StatusUnauthorized" 등
 
 	// publish
 	Topic      string // "order.completed"
@@ -341,6 +342,11 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 			d.PkgName = parts[0]
 			if len(parts) > 1 {
 				d.FuncMethod = strcase.ToGoPascal(parts[1])
+			}
+			if seq.ErrStatus != 0 {
+				d.ErrStatus = httpStatusConst(seq.ErrStatus)
+			} else {
+				d.ErrStatus = "http.StatusInternalServerError"
 			}
 		} else {
 			// 패키지 접두사 모델이든 일반 모델이든 동일: modelName + "Model." + method
@@ -993,6 +999,33 @@ func rootVar(s string) string {
 		return s[:idx]
 	}
 	return s
+}
+
+func httpStatusConst(code int) string {
+	switch code {
+	case 400:
+		return "http.StatusBadRequest"
+	case 401:
+		return "http.StatusUnauthorized"
+	case 402:
+		return "http.StatusPaymentRequired"
+	case 403:
+		return "http.StatusForbidden"
+	case 404:
+		return "http.StatusNotFound"
+	case 409:
+		return "http.StatusConflict"
+	case 429:
+		return "http.StatusTooManyRequests"
+	case 500:
+		return "http.StatusInternalServerError"
+	case 502:
+		return "http.StatusBadGateway"
+	case 503:
+		return "http.StatusServiceUnavailable"
+	default:
+		return fmt.Sprintf("%d", code)
+	}
 }
 
 // --- Model 인터페이스 파생 ---

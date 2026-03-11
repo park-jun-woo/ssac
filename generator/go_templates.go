@@ -70,14 +70,14 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{- define "call_with_result" -}}
 	{{if .Unused}}_{{else}}{{.Result.Var}}{{end}}, err {{if .ReAssign}}={{else}}:={{end}} {{.PkgName}}.{{.FuncMethod}}({{.PkgName}}.{{.FuncMethod}}Request{ {{.InputFields}} })
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
+		c.JSON({{.ErrStatus}}, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
 
 {{- define "call_no_result" -}}
 	if _, err {{if .FirstErr}}:={{else}}={{end}} {{.PkgName}}.{{.FuncMethod}}({{.PkgName}}.{{.FuncMethod}}Request{ {{.InputFields}} }); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "{{.Message}}"})
+		c.JSON({{.ErrStatus}}, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
