@@ -14,7 +14,7 @@ Go 1.24+, `go/ast` (parsing), `text/template` (codegen), `gopkg.in/yaml.v3` (Ope
 
 ## DSL Syntax — One Line Per Sequence
 
-10 sequence types. Each is a single comment line (except `@response` which is a multi-line block). Service files use `.ssac` extension (not `.go`).
+11 sequence types + 1 trigger. Each is a single comment line (except `@response` which is a multi-line block). Service files use `.ssac` extension (not `.go`).
 
 ### CRUD — Model Operations
 
@@ -49,7 +49,7 @@ Value format: `source.Field` or `"literal"`
 - `query` — QueryOpts (pagination/sort/filter), explicit in inputs (reserved source)
 - `"cancelled"` — string literal
 
-Reserved sources: `request`, `currentUser`, `config`, `query` — cannot be used as result variable names.
+Reserved sources: `request`, `currentUser`, `config`, `query`, `message` — cannot be used as result variable names.
 
 Parser IR: all sequence types use `seq.Inputs` (map[string]string). CRUD uses `seq.Inputs` not `seq.Args`.
 
@@ -65,6 +65,7 @@ Required elements per type:
 | state | DiagramID, Inputs, Transition, Message |
 | auth | Action, Resource, Message |
 | call | Model (pkg.Func format) |
+| publish | Topic, Inputs (payload) |
 | response | (none, Fields optional) |
 
 ### WARNING Suppression (`!` suffix)
@@ -113,6 +114,29 @@ Target: variable (`course`) or variable.field (`course.InstructorID`)
 
 - Package name from Go import declarations in spec file
 - With result: 500 on error. Without result: 401 on error.
+
+### Publish — Event Publishing
+
+```go
+// @publish "topic" {Key: value, ...}                      — Basic publish
+// @publish "topic" {Key: value, ...} {delay: 1800}        — With options
+```
+
+- Publishes async event to queue. Payload uses unified `{Key: value}` syntax.
+- Options: `delay` (seconds), `priority` ("high", "normal", "low")
+- Codegen: `queue.Publish(c.Request.Context(), "topic", map[string]any{...})`
+- With options: `queue.Publish(ctx, "topic", payload, queue.WithDelay(1800))`
+
+### Subscribe — Queue Event Trigger
+
+```go
+// @subscribe "topic"
+```
+
+- Function-level trigger (not a sequence). First annotation before sequences.
+- `message` replaces `request` as input source: `message.OrderID`, `message.Email`
+- Validation: no `@response` in subscribe func, no `request` usage, no `message` in HTTP func.
+- Parser IR: `ServiceFunc.Subscribe = &SubscribeInfo{Topic: "..."}` (nil = HTTP trigger)
 
 ### Response — Field Mapping Block
 
@@ -223,6 +247,8 @@ Additional features when symbol table (external SSOT) is available:
 - **Spec file imports**: Parser collects Go import declarations from spec files and passes them to generated code
 - **Package prefix model**: `pkg.Model.Method({...})` → validates against Go interface in package path. Missing interface → WARNING, missing method → ERROR with available methods list. Parameter matching: SSaC keys ↔ interface params (`context.Context` excluded). Package models skip DDL check and `models_gen.go`
 - **Go reserved word validation**: DDL column names that are Go keywords (`type`, `range`, `select`, etc.) → ERROR with table name and rename suggestion. Prevents `models_gen.go` compile errors.
+- **@publish codegen**: `@publish "topic" {payload}` → `queue.Publish(c.Request.Context(), "topic", map[string]any{...})`. Options: `queue.WithDelay()`, `queue.WithPriority()`. Import `"queue"` auto-added.
+- **@subscribe trigger**: Function-level `@subscribe "topic"` sets `ServiceFunc.Subscribe`. `message` is pre-declared variable (like `request` for HTTP). Subscribe funcs cannot use `@response` or `request`.
 
 Singularization rules (sqlc filename → model name): `ies`→`y`, `sses`→`ss`, `xes`→`x`, otherwise remove trailing `s`
 
@@ -261,4 +287,4 @@ Codegen effects:
 - Filenames: snake_case, variables/functions: camelCase, types: PascalCase
 - Go common initialisms: `ID`, `URL`, `HTTP`, `API` etc. — all-caps (exported) or all-lowercase (unexported first word)
 - Tests: `go test ./parser/... ./validator/... ./generator/... -count=1`
-- 125 tests: parser 34 + validator 61 + generator 30
+- 135 tests: parser 37 + validator 67 + generator 31

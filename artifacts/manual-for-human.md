@@ -116,7 +116,7 @@ Value 형식: `source.Field` 또는 `"literal"`
 
 파서 IR: 모든 시퀀스 타입이 `seq.Inputs` (map[string]string)을 사용한다. CRUD도 `seq.Args` 대신 `seq.Inputs` 사용.
 
-**예약 소스 (Reserved Sources)**: `request`, `currentUser`, `config`, `query`는 시스템이 사전 정의하는 특수 소스다.
+**예약 소스 (Reserved Sources)**: `request`, `currentUser`, `config`, `query`, `message`는 시스템이 사전 정의하는 특수 소스다.
 result 변수명으로 사용하면 validator에서 ERROR가 발생한다.
 
 **타입별 필수 요소:**
@@ -131,6 +131,7 @@ result 변수명으로 사용하면 validator에서 ERROR가 발생한다.
 | state | DiagramID, Inputs, Transition, Message |
 | auth | Action, Resource, Message |
 | call | Model (pkg.Func 형식) |
+| publish | Topic, Inputs (payload) |
 | response | (없음, Fields 선택) |
 
 ### 도메인 폴더 구조 (필수)
@@ -151,7 +152,7 @@ specs/service/
 
 ---
 
-## 시퀀스 타입 (10종)
+## 시퀀스 타입 (11종) + 트리거 (1종)
 
 ### 패키지 접두사 모델
 
@@ -371,6 +372,85 @@ if err != nil {
     return
 }
 ```
+
+### @publish — 이벤트 발행
+
+```go
+// @publish "{topic}" {Key: value, ...}
+// @publish "{topic}" {Key: value, ...} {option: value}
+```
+
+함수 내부에서 큐 이벤트를 비동기 발행한다.
+
+```go
+// 기본 발행
+// @publish "order.completed" {OrderID: order.ID, Email: order.Email, Amount: order.Amount}
+
+// 지연 발행 (30분)
+// @publish "cart.abandoned" {CartID: cart.ID, UserID: currentUser.ID} {delay: 1800}
+```
+
+옵션:
+
+| 옵션 | 타입 | 설명 |
+|---|---|---|
+| `delay` | int (초) | 지연 발행 |
+| `priority` | string | 우선순위 ("high", "normal", "low") |
+
+코드젠:
+```go
+err = queue.Publish(c.Request.Context(), "order.completed", map[string]any{
+    "Email":   order.Email,
+    "OrderID": order.ID,
+})
+if err != nil {
+    c.JSON(http.StatusInternalServerError, gin.H{"error": "이벤트 발행 실패"})
+    return
+}
+```
+
+옵션 포함:
+```go
+queue.Publish(c.Request.Context(), "cart.abandoned", map[string]any{
+    "CartID": cart.ID,
+}, queue.WithDelay(1800))
+```
+
+### @subscribe — 큐 이벤트 트리거
+
+```go
+// @subscribe "{topic}"
+```
+
+함수 레벨 트리거. HTTP 트리거 대신 큐 이벤트를 수신하여 함수를 실행한다.
+함수 본문의 첫 번째 어노테이션으로 선언하고, 이후 시퀀스는 기존과 동일하다.
+
+```go
+// @subscribe "order.completed"
+// @get Order order = Order.FindByID({ID: message.OrderID})
+// @call mail.SendEmail({To: message.Email, Subject: "주문 완료"})
+// @put Order.UpdateNotified({ID: order.ID, Notified: "true"})
+func OnOrderCompleted() {}
+```
+
+입력 변수 `message`:
+- HTTP 트리거에서 `request`를 쓰듯, 구독 트리거에서는 `message`를 사용한다
+- `message.OrderID`, `message.Email` 형태로 페이로드 필드에 접근
+
+| 트리거 | 입력 변수 |
+|---|---|
+| HTTP | `request` |
+| Queue | `message` |
+
+검증 규칙:
+
+| 규칙 | Level |
+|---|---|
+| `@subscribe` 함수에 `@response` 사용 | ERROR |
+| `@subscribe` 함수에서 `request` 사용 | ERROR |
+| HTTP 함수에서 `message` 사용 | ERROR |
+| `@publish` topic 빈 문자열 | ERROR |
+| `@publish` payload 없음 | ERROR |
 
 ### @response — 응답 반환
 

@@ -82,6 +82,16 @@ var goTemplates = template.Must(template.New("").Parse(`
 	}
 {{end}}
 
+{{- define "publish" -}}
+	err {{if .FirstErr}}:={{else}}={{end}} queue.Publish(c.Request.Context(), "{{.Topic}}", map[string]any{
+{{.InputFields}}
+	}{{.OptionCode}})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "{{.Message}}"})
+		return
+	}
+{{end}}
+
 {{- define "response" -}}
 	c.JSON(http.StatusOK, gin.H{
 		{{- range $key, $val := .ResponseFields}}

@@ -925,6 +925,95 @@ func TestValidateResponseDirectPageFieldsMissing(t *testing.T) {
 	assertHasError(t, errs, `"items" 필드가 없습니다`)
 }
 
+// --- 내부 검증: @publish / @subscribe ---
+
+func TestValidatePublishTopicMissing(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "Publish", FileName: "publish.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqPublish, Inputs: map[string]string{"OrderID": "order.ID"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "Topic 누락")
+}
+
+func TestValidatePublishPayloadMissing(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "Publish", FileName: "publish.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqPublish, Topic: "order.completed"},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "Payload 누락")
+}
+
+func TestValidateSubscribeWithResponse(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "OnOrder", FileName: "on_order.go",
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed"},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+			{Type: parser.SeqResponse, Fields: map[string]string{"order": "order"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "@subscribe 함수에 @response를 사용할 수 없습니다")
+}
+
+func TestValidateSubscribeWithRequest(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "OnOrder", FileName: "on_order.go",
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed"},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "request.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "@subscribe 함수에서 request를 사용할 수 없습니다")
+}
+
+func TestValidateHTTPWithMessage(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "GetOrder", FileName: "get_order.go",
+		// Subscribe nil → HTTP trigger
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "HTTP 함수에서 message를 사용할 수 없습니다")
+}
+
+func TestValidateMessageReservedSource(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "Test", FileName: "test.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "User.FindByID", Inputs: map[string]string{"ID": "request.ID"}, Result: &parser.Result{Type: "User", Var: "message"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "예약 소스이므로 result 변수명으로 사용할 수 없습니다")
+}
+
+func TestValidateSubscribeMessageVariable(t *testing.T) {
+	// subscribe 함수에서 message는 선언 없이 사용 가능
+	funcs := []parser.ServiceFunc{{
+		Name: "OnOrder", FileName: "on_order.go",
+		Subscribe: &parser.SubscribeInfo{Topic: "order.completed"},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+		},
+	}}
+	errs := Validate(funcs)
+	for _, e := range errs {
+		if contains(e.Message, `"message" 변수가 아직 선언되지 않았습니다`) {
+			t.Errorf("message should be pre-declared in subscribe func: %s", e.Message)
+		}
+	}
+}
+
 // --- 외부 검증: Go 예약어 ---
 
 func TestValidateGoReservedWordInInputs(t *testing.T) {

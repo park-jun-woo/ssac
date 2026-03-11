@@ -37,6 +37,7 @@ func validateFunc(sf parser.ServiceFunc) []ValidationError {
 	errs = append(errs, validateVariableFlow(sf)...)
 	errs = append(errs, validateStaleResponse(sf)...)
 	errs = append(errs, validateReservedSourceConflict(sf)...)
+	errs = append(errs, validateSubscribeRules(sf)...)
 	return errs
 }
 
@@ -134,6 +135,14 @@ func validateRequiredFields(sf parser.ServiceFunc) []ValidationError {
 				errs = append(errs, ctx.err("@call", fmt.Sprintf("반환 타입에 기본 타입 %q은 사용할 수 없습니다 — Response struct 타입을 지정하세요", seq.Result.Type)))
 			}
 
+		case parser.SeqPublish:
+			if seq.Topic == "" {
+				errs = append(errs, ctx.err("@publish", "Topic 누락"))
+			}
+			if len(seq.Inputs) == 0 {
+				errs = append(errs, ctx.err("@publish", "Payload 누락"))
+			}
+
 		case parser.SeqResponse:
 			// Fields는 선택 — 빈 @response {} 허용 (DELETE 등)
 
@@ -159,6 +168,9 @@ func validateVariableFlow(sf parser.ServiceFunc) []ValidationError {
 	declared := map[string]bool{
 		"currentUser": true,
 		"config":      true,
+	}
+	if sf.Subscribe != nil {
+		declared["message"] = true
 	}
 
 	for i, seq := range sf.Sequences {
@@ -657,6 +669,7 @@ var reservedSources = map[string]bool{
 	"currentUser": true,
 	"config":      true,
 	"query":       true,
+	"message":     true,
 }
 
 // validateReservedSourceConflict는 result 변수명이 예약 소스와 충돌하면 ERROR를 반환한다.
@@ -671,6 +684,44 @@ func validateReservedSourceConflict(sf parser.ServiceFunc) []ValidationError {
 			errs = append(errs, ctx.err("@"+seq.Type, fmt.Sprintf("%q는 예약 소스이므로 result 변수명으로 사용할 수 없습니다", seq.Result.Var)))
 		}
 	}
+	return errs
+}
+
+// validateSubscribeRules는 subscribe/HTTP 트리거와 관련된 규칙을 검증한다.
+func validateSubscribeRules(sf parser.ServiceFunc) []ValidationError {
+	var errs []ValidationError
+
+	if sf.Subscribe != nil {
+		// subscribe 함수에 @response 있으면 ERROR
+		for i, seq := range sf.Sequences {
+			if seq.Type == parser.SeqResponse {
+				ctx := errCtx{sf.FileName, sf.Name, i}
+				errs = append(errs, ctx.err("@subscribe", "@subscribe 함수에 @response를 사용할 수 없습니다"))
+			}
+		}
+		// subscribe 함수에서 request 사용하면 ERROR
+		for i, seq := range sf.Sequences {
+			for _, val := range seq.Inputs {
+				if strings.HasPrefix(val, "request.") {
+					ctx := errCtx{sf.FileName, sf.Name, i}
+					errs = append(errs, ctx.err("@subscribe", "@subscribe 함수에서 request를 사용할 수 없습니다 — message를 사용하세요"))
+					break
+				}
+			}
+		}
+	} else {
+		// HTTP 함수에서 message 사용하면 ERROR
+		for i, seq := range sf.Sequences {
+			for _, val := range seq.Inputs {
+				if strings.HasPrefix(val, "message.") {
+					ctx := errCtx{sf.FileName, sf.Name, i}
+					errs = append(errs, ctx.err("@sequence", "HTTP 함수에서 message를 사용할 수 없습니다 — @subscribe 함수에서만 사용 가능합니다"))
+					break
+				}
+			}
+		}
+	}
+
 	return errs
 }
 

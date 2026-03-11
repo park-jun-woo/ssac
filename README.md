@@ -13,7 +13,7 @@ specs/service/<domain>/*.ssac  →  ssac validate  →  ssac gen  →  artifacts
 
 Every service function is a sequence of steps. Each step follows a binary contract: **succeed → next line, fail → return**. This is not an abstraction we invented — it's how service logic already works. SSaC makes it explicit.
 
-10 fixed sequence types cover all service-layer operations that follow this contract. If something doesn't fit, delegate it to `call`. The set is closed by design.
+11 fixed sequence types + 1 trigger cover all service-layer operations that follow this contract. If something doesn't fit, delegate it to `call`. The set is closed by design.
 
 No LLM, no inference — pure symbolic codegen from templates. The spec is the source of truth.
 
@@ -65,7 +65,7 @@ func CreateSession(c *gin.Context) {
 }
 ```
 
-## Sequence Types (10)
+## Sequence Types (11) + Trigger (1)
 
 | Type | Syntax | Role |
 |---|---|---|
@@ -78,11 +78,14 @@ func CreateSession(c *gin.Context) {
 | `state` | `@state id {inputs} "transition" "msg"` | State transition check (409) |
 | `auth` | `@auth "action" "resource" {inputs} "msg"` | Permission check (403) |
 | `call` | `@call [Type var =] pkg.Func({Key: value})` | External function call |
+| `publish` | `@publish "topic" {Key: value} [{options}]` | Async event publishing |
 | `response` | `@response { field: var }` or `@response var` | Return response (block or shorthand) |
+| **Trigger** | | |
+| `subscribe` | `@subscribe "topic"` | Queue event trigger (function-level, not a sequence) |
 
 All sequence types use unified `{Key: value}` syntax. Value format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`), `query` (QueryOpts), or `"literal"`. Result types support generic wrappers: `Page[T]` (offset pagination), `Cursor[T]` (cursor pagination).
 
-Reserved sources (`request`, `currentUser`, `config`, `query`) cannot be used as result variable names. Append `!` to any type to suppress WARNINGs (e.g. `@delete!`, `@response!`).
+Reserved sources (`request`, `currentUser`, `config`, `query`, `message`) cannot be used as result variable names. `message` is the queue equivalent of `request` — used in `@subscribe` functions only. Append `!` to any type to suppress WARNINGs (e.g. `@delete!`, `@response!`).
 
 ## Install & Run
 
@@ -143,6 +146,8 @@ When external SSOT (symbol table) is available, `ssac gen` adds:
 - **@auth codegen**: `authz.Check(currentUser, "action", "resource", authz.Input{...})`
 - **Spec file imports**: Go import declarations in spec files are passed to generated code
 - **Package prefix model**: `pkg.Model.Method({...})` — non-DDL models validated against Go interface. Missing interface → WARNING, missing method → ERROR with available methods. Parameter matching: SSaC keys ↔ interface params (`context.Context` excluded). Excluded from `models_gen.go`
+- **@publish codegen**: `queue.Publish(c.Request.Context(), "topic", map[string]any{...})`. Options: `queue.WithDelay()`, `queue.WithPriority()`. Import `"queue"` auto-added
+- **@subscribe trigger**: Function-level `@subscribe "topic"` sets `ServiceFunc.Subscribe`. `message` is pre-declared variable. Subscribe funcs cannot use `@response` or `request`; HTTP funcs cannot use `message`
 
 ## OpenAPI x- Extensions
 
@@ -206,7 +211,7 @@ files/                           # Design documents
 go test ./parser/... ./validator/... ./generator/... -count=1
 ```
 
-122 tests: parser 34 + validator 58 + generator 30
+135 tests: parser 37 + validator 67 + generator 31
 
 ## License
 

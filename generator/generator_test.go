@@ -516,6 +516,36 @@ func TestGeneratePageNoHasTotal(t *testing.T) {
 	assertContains(t, code, `gigPage, err :=`)
 }
 
+// --- @publish ---
+
+func TestGeneratePublish(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name: "CompleteOrder", FileName: "complete_order.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "request.OrderID"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+			{Type: parser.SeqPublish, Topic: "order.completed", Inputs: map[string]string{"OrderID": "order.ID", "Email": "order.Email"}},
+			{Type: parser.SeqResponse, Fields: map[string]string{"order": "order"}},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	assertContains(t, code, `queue.Publish(c.Request.Context(), "order.completed"`)
+	assertContains(t, code, `"OrderID": order.ID`)
+	assertContains(t, code, `order.Email`)
+	assertContains(t, code, `"queue"`)
+}
+
+func TestGeneratePublishWithOptions(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name: "AbandonCart", FileName: "abandon_cart.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqPublish, Topic: "cart.abandoned", Inputs: map[string]string{"CartID": "cart.ID"}, Options: map[string]string{"delay": "1800"}},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	assertContains(t, code, `queue.Publish(c.Request.Context(), "cart.abandoned"`)
+	assertContains(t, code, `queue.WithDelay(1800)`)
+}
+
 // --- 패키지 접두사 모델 ---
 
 func TestGeneratePackageModelCall(t *testing.T) {

@@ -2,11 +2,17 @@ package parser
 
 // ServiceFunc는 하나의 서비스 함수 선언이다.
 type ServiceFunc struct {
-	Name      string     // 함수명 (e.g. "GetCourse")
-	FileName  string     // 원본 파일명
-	Domain    string     // 도메인 폴더명 (e.g. "auth", 없으면 "")
-	Sequences []Sequence // 시퀀스 목록
-	Imports   []string   // Go import 경로
+	Name      string         // 함수명 (e.g. "GetCourse")
+	FileName  string         // 원본 파일명
+	Domain    string         // 도메인 폴더명 (e.g. "auth", 없으면 "")
+	Sequences []Sequence     // 시퀀스 목록
+	Imports   []string       // Go import 경로
+	Subscribe *SubscribeInfo // nil이면 HTTP 트리거
+}
+
+// SubscribeInfo는 큐 구독 트리거 정보다.
+type SubscribeInfo struct {
+	Topic string // "order.completed"
 }
 
 // Sequence는 하나의 시퀀스 라인이다.
@@ -28,6 +34,11 @@ type Sequence struct {
 	DiagramID  string            // "reservation"
 	Inputs     map[string]string // {status: "reservation.Status"}
 	Transition string            // "cancel"
+
+	// publish: 이벤트 발행
+	Topic   string            // "order.completed"
+	Options map[string]string // {delay: "1800"} (선택)
+	// Inputs 재사용: payload
 
 	// auth: 권한 검사
 	Action   string // "delete"
@@ -67,6 +78,7 @@ const (
 	SeqState    = "state"
 	SeqAuth     = "auth"
 	SeqCall     = "call"
+	SeqPublish  = "publish"
 	SeqResponse = "response"
 )
 
@@ -80,5 +92,6 @@ var ValidSequenceTypes = map[string]bool{
 	SeqState:    true,
 	SeqAuth:     true,
 	SeqCall:     true,
+	SeqPublish:  true,
 	SeqResponse: true,
 }

@@ -68,12 +68,24 @@ func ParseFile(path string) ([]ServiceFunc, error) {
 			continue
 		}
 
-		funcs = append(funcs, ServiceFunc{
-			Name:      fn.Name.Name,
-			FileName:  filepath.Base(path),
-			Imports:   imports,
-			Sequences: sequences,
-		})
+		sf := ServiceFunc{
+			Name:     fn.Name.Name,
+			FileName: filepath.Base(path),
+			Imports:  imports,
+		}
+
+		// @subscribe 추출: 시퀀스가 아닌 함수 메타데이터
+		var filtered []Sequence
+		for _, seq := range sequences {
+			if seq.Type == "subscribe" {
+				sf.Subscribe = &SubscribeInfo{Topic: seq.Topic}
+				continue
+			}
+			filtered = append(filtered, seq)
+		}
+		sf.Sequences = filtered
+
+		funcs = append(funcs, sf)
 		// 다음 함수를 위해 comments를 리셋하지 않아도 됨 — cg.End() < fnPos 체크가 함수별로 필터링
 	}
 	return funcs, nil
@@ -180,6 +192,11 @@ func parseLine(line string) (*Sequence, bool, error) {
 		seq, err = parseState(line[7:])
 	case strings.HasPrefix(line, "@auth "):
 		seq, err = parseAuth(line[6:])
+	case strings.HasPrefix(line, "@publish "):
+		seq, err = parsePublish(line[9:])
+	case strings.HasPrefix(line, "@subscribe "):
+		topic, _ := extractQuoted(line[11:])
+		seq = &Sequence{Type: "subscribe", Topic: topic}
 	case strings.HasPrefix(line, "@call "):
 		seq, err = parseCall(line[6:])
 	default:
@@ -345,6 +362,32 @@ func parseCall(rest string) (*Sequence, error) {
 	}
 
 	return seq, nil
+}
+
+// parsePublish는 @publish를 파싱한다.
+// "topic" {payload} [{options}]
+func parsePublish(rest string) (*Sequence, error) {
+	rest = strings.TrimSpace(rest)
+	topic, rest := extractQuoted(rest)
+	rest = strings.TrimSpace(rest)
+	payload, rest, err := extractInputs(rest)
+	if err != nil {
+		return nil, err
+	}
+	rest = strings.TrimSpace(rest)
+	var options map[string]string
+	if strings.HasPrefix(rest, "{") {
+		options, _, err = extractInputs(rest)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &Sequence{
+		Type:    SeqPublish,
+		Topic:   topic,
+		Inputs:  payload,
+		Options: options,
+	}, nil
 }
 
 // parseCallExprInputs는 "pkg.Func({Key: val, ...})"를 파싱한다.

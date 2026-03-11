@@ -49,6 +49,8 @@ ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블
 // @state diagramID {inputs} "transition" "msg"             — 상태 전이 검사 (409)
 // @auth "action" "resource" {inputs} "message"             — 권한 검사 (403)
 // @call Type var = pkg.Func({Key: value, ...})             — 외부 함수 호출 (result 있음/없음)
+// @publish "topic" {Key: value, ...}                       — 이벤트 발행 (옵션: {delay: 1800})
+// @subscribe "topic"                                       — 큐 이벤트 트리거 (함수 메타, 시퀀스 아님)
 // @response { field: var, field: var.Member }              — 응답 (멀티라인 블록)
 // @response varName                                        — 응답 간단쓰기 (직접 반환)
 // @type! — 모든 시퀀스에 ! 접미사로 WARNING 억제 (e.g. @delete!, @response!)
@@ -62,8 +64,9 @@ Args 형식: 모든 시퀀스 타입에서 `{Key: value}` 통일 문법 사용 (
 - `config.APIKey` — 환경 설정 (예약 소스)
 - `"cancelled"` — 문자열 리터럴
 
-예약 소스 (Reserved Sources): `request`, `currentUser`, `config`, `query`
+예약 소스 (Reserved Sources): `request`, `currentUser`, `config`, `query`, `message`
 - 사용자가 선언하지 않는 특수 소스. result 변수명으로 사용 불가 (validator ERROR)
+- `message.Field` → subscribe 함수에서 큐 페이로드 접근 (HTTP 함수에서는 사용 불가)
 - `request.Field` → 코드젠에서 `lcFirst(Field)` 로컬 변수로 치환
 - `currentUser.Field` → `currentUser.Field` 실제 변수 유지
 - `config.Field` → `config.Field` 실제 변수 유지
@@ -83,6 +86,7 @@ Args 형식: 모든 시퀀스 타입에서 `{Key: value}` 통일 문법 사용 (
 | state | DiagramID, Inputs, Transition, Message |
 | auth | Action, Resource, Message |
 | call | Model (pkg.Func 형식) |
+| publish | Topic, Inputs (payload) |
 | response | (없음, Fields 선택) |
 
 ## 디렉토리
@@ -148,6 +152,8 @@ files/                           # 기초 자료
 - **@auth 코드젠**: `authz.Check(currentUser, "action", "resource", authz.Input{...})`
 - **Spec 파일 imports**: spec 파일의 Go import 선언이 생성 코드에 전달됨
 - **패키지 접두사 모델**: `pkg.Model.Method({...})` — 소문자 접두사 → 패키지 Go interface 교차 검증. interface 없으면 WARNING, 메서드 없으면 ERROR + 사용 가능 목록. 파라미터 매칭: SSaC keys ↔ interface params (`context.Context` 제외). `models_gen.go` 제외. `Sequence.Package` 필드로 추적
+- **@publish 코드젠**: `queue.Publish(c.Request.Context(), "topic", map[string]any{...})`. 옵션: `queue.WithDelay()`, `queue.WithPriority()`. import `"queue"` 자동 추가
+- **@subscribe 트리거**: `ServiceFunc.Subscribe` 필드. `message` 예약 변수 (subscribe 함수 전용). subscribe 함수는 `@response` 불가, `request` 불가. HTTP 함수에서 `message` 불가
 
 ## 더미 프로젝트
 

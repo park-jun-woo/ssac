@@ -176,6 +176,10 @@ type templateData struct {
 	PkgName    string
 	FuncMethod string
 
+	// publish
+	Topic      string // "order.completed"
+	OptionCode string // ", queue.WithDelay(1800)" 또는 ""
+
 	// response
 	ResponseFields map[string]string
 
@@ -247,6 +251,13 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 		}
 	}
 
+	// Publish
+	if seq.Type == parser.SeqPublish {
+		d.Topic = seq.Topic
+		d.InputFields = buildPublishPayload(seq.Inputs)
+		d.OptionCode = buildPublishOptions(seq.Options)
+	}
+
 	// Response
 	d.ResponseFields = seq.Fields
 
@@ -276,7 +287,7 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 			d.FirstErr = true
 			*errDeclared = true
 		}
-	case parser.SeqPut, parser.SeqDelete:
+	case parser.SeqPut, parser.SeqDelete, parser.SeqPublish:
 		if !*errDeclared {
 			d.FirstErr = true
 			*errDeclared = true
@@ -298,6 +309,8 @@ func templateName(seq parser.Sequence) string {
 			return "call_with_result"
 		}
 		return "call_no_result"
+	case parser.SeqPublish:
+		return "publish"
 	default:
 		return seq.Type
 	}
@@ -378,6 +391,46 @@ func buildArgsCodeFromInputs(inputs map[string]string) string {
 		parts = append(parts, inputValueToCode(inputs[k]))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// buildPublishPayload는 publish의 Inputs를 map[string]any 리터럴 필드로 변환한다.
+func buildPublishPayload(inputs map[string]string) string {
+	keys := make([]string, 0, len(inputs))
+	for k := range inputs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var fields []string
+	for _, k := range keys {
+		fields = append(fields, fmt.Sprintf("\t\t%q: %s,", ucFirst(k), inputValueToCode(inputs[k])))
+	}
+	return strings.Join(fields, "\n")
+}
+
+// buildPublishOptions는 publish의 Options를 Go 코드로 변환한다.
+func buildPublishOptions(options map[string]string) string {
+	if len(options) == 0 {
+		return ""
+	}
+	var parts []string
+	keys := make([]string, 0, len(options))
+	for k := range options {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		switch k {
+		case "delay":
+			parts = append(parts, fmt.Sprintf("queue.WithDelay(%s)", options[k]))
+		case "priority":
+			parts = append(parts, fmt.Sprintf("queue.WithPriority(%q)", options[k]))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return ", " + strings.Join(parts, ", ")
 }
 
 // hasQueryInput은 Inputs map에 query 예약 소스가 있는지 확인한다.
@@ -576,6 +629,9 @@ func collectImports(sf parser.ServiceFunc, reqParams []typedRequestParam, pathPa
 		}
 		if seq.Type == parser.SeqAuth {
 			seen["authz"] = true
+		}
+		if seq.Type == parser.SeqPublish {
+			seen["queue"] = true
 		}
 		if seq.Result != nil && seq.Result.Wrapper != "" {
 			// 간단쓰기(@response varName)면 handler에서 pagination 직접 참조 없음

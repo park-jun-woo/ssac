@@ -585,6 +585,93 @@ func ListGigs(c *gin.Context) {}
 	}
 }
 
+// --- @publish / @subscribe ---
+
+func TestParsePublish(t *testing.T) {
+	src := `package service
+
+// @get Order order = Order.FindByID({ID: request.OrderID})
+// @publish "order.completed" {OrderID: order.ID, Email: order.Email}
+// @response { order: order }
+func CompleteOrder() {}
+`
+	sfs := parseTestFile(t, src)
+	if len(sfs[0].Sequences) != 3 {
+		t.Fatalf("expected 3 sequences, got %d", len(sfs[0].Sequences))
+	}
+	seq := sfs[0].Sequences[1]
+	assertEqual(t, "Type", seq.Type, SeqPublish)
+	assertEqual(t, "Topic", seq.Topic, "order.completed")
+	if len(seq.Inputs) != 2 {
+		t.Fatalf("expected 2 inputs, got %d", len(seq.Inputs))
+	}
+	assertEqual(t, "Inputs.OrderID", seq.Inputs["OrderID"], "order.ID")
+	assertEqual(t, "Inputs.Email", seq.Inputs["Email"], "order.Email")
+	if seq.Options != nil {
+		t.Errorf("expected nil options, got %v", seq.Options)
+	}
+}
+
+func TestParsePublishWithOptions(t *testing.T) {
+	src := `package service
+
+// @publish "cart.abandoned" {CartID: cart.ID, UserID: currentUser.ID} {delay: 1800}
+func AbandonCart() {}
+`
+	sfs := parseTestFile(t, src)
+	seq := sfs[0].Sequences[0]
+	assertEqual(t, "Type", seq.Type, SeqPublish)
+	assertEqual(t, "Topic", seq.Topic, "cart.abandoned")
+	assertEqual(t, "Inputs.CartID", seq.Inputs["CartID"], "cart.ID")
+	if seq.Options == nil {
+		t.Fatal("expected options")
+	}
+	assertEqual(t, "Options.delay", seq.Options["delay"], "1800")
+}
+
+func TestParseSubscribe(t *testing.T) {
+	src := `package service
+
+// @subscribe "order.completed"
+// @get Order order = Order.FindByID({ID: message.OrderID})
+func OnOrderCompleted() {}
+`
+	sfs := parseTestFile(t, src)
+	sf := sfs[0]
+	if sf.Subscribe == nil {
+		t.Fatal("expected Subscribe to be set")
+	}
+	assertEqual(t, "Subscribe.Topic", sf.Subscribe.Topic, "order.completed")
+	// @subscribe는 시퀀스에 포함되지 않아야 함
+	if len(sf.Sequences) != 1 {
+		t.Fatalf("expected 1 sequence (subscribe filtered), got %d", len(sf.Sequences))
+	}
+	assertEqual(t, "seq0.Type", sf.Sequences[0].Type, SeqGet)
+}
+
+func TestParseSubscribeWithSequences(t *testing.T) {
+	src := `package service
+
+// @subscribe "order.completed"
+// @get Order order = Order.FindByID({ID: message.OrderID})
+// @call mail.SendEmail({To: message.Email, Subject: "done"})
+// @put Order.UpdateNotified({ID: order.ID, Notified: "true"})
+func OnOrderCompleted() {}
+`
+	sfs := parseTestFile(t, src)
+	sf := sfs[0]
+	if sf.Subscribe == nil {
+		t.Fatal("expected Subscribe to be set")
+	}
+	assertEqual(t, "Subscribe.Topic", sf.Subscribe.Topic, "order.completed")
+	if len(sf.Sequences) != 3 {
+		t.Fatalf("expected 3 sequences, got %d", len(sf.Sequences))
+	}
+	assertEqual(t, "seq0.Type", sf.Sequences[0].Type, SeqGet)
+	assertEqual(t, "seq1.Type", sf.Sequences[1].Type, SeqCall)
+	assertEqual(t, "seq2.Type", sf.Sequences[2].Type, SeqPut)
+}
+
 // --- 패키지 접두사 모델 ---
 
 func TestParsePackagePrefixModel(t *testing.T) {
