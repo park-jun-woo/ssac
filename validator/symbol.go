@@ -36,7 +36,8 @@ func (ms ModelSymbol) HasMethod(name string) bool {
 
 // MethodInfo는 모델 메서드의 상세 정보다.
 type MethodInfo struct {
-	Cardinality string // "one", "many", "exec"
+	Cardinality string   // "one", "many", "exec"
+	Params      []string // interface 파라미터명 (context.Context 제외, 패키지 모델용)
 }
 
 // DDLTable은 DDL에서 파싱한 테이블 컬럼 정보다.
@@ -455,7 +456,18 @@ func (st *SymbolTable) loadPackageGoInterfaces(pkgName, dir string) {
 				ms := ModelSymbol{Methods: make(map[string]MethodInfo)}
 				for _, method := range iface.Methods.List {
 					if len(method.Names) > 0 {
-						ms.Methods[method.Names[0].Name] = MethodInfo{}
+						var params []string
+						if ft, ok := method.Type.(*ast.FuncType); ok && ft.Params != nil {
+							for _, param := range ft.Params.List {
+								if isContextType(param.Type) {
+									continue
+								}
+								for _, name := range param.Names {
+									params = append(params, name.Name)
+								}
+							}
+						}
+						ms.Methods[method.Names[0].Name] = MethodInfo{Params: params}
 					}
 				}
 				if len(ms.Methods) > 0 {
@@ -470,6 +482,19 @@ func (st *SymbolTable) loadPackageGoInterfaces(pkgName, dir string) {
 			}
 		}
 	}
+}
+
+// isContextType는 ast.Expr이 context.Context 타입인지 확인한다.
+func isContextType(expr ast.Expr) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	return ident.Name == "context" && sel.Sel.Name == "Context"
 }
 
 // --- OpenAPI YAML 구조체 ---

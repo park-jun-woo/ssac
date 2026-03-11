@@ -319,7 +319,7 @@ func TestParseFlatServiceError(t *testing.T) {
 // }
 func Login() {}
 `
-	os.WriteFile(filepath.Join(dir, "login.go"), []byte(src), 0644)
+	os.WriteFile(filepath.Join(dir, "login.ssac"), []byte(src), 0644)
 
 	_, err := ParseDir(dir)
 	if err == nil {
@@ -343,7 +343,7 @@ func TestParseDomainFolder(t *testing.T) {
 // }
 func Login(c *gin.Context) {}
 `
-	os.WriteFile(filepath.Join(authDir, "login.go"), []byte(src), 0644)
+	os.WriteFile(filepath.Join(authDir, "login.ssac"), []byte(src), 0644)
 
 	funcs, err := ParseDir(dir)
 	if err != nil {

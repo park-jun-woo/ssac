@@ -10,11 +10,11 @@ import (
 	"strings"
 )
 
-// ParseDir은 디렉토리 내 모든 .go 파일을 재귀 탐색하여 []ServiceFunc를 반환한다.
+// ParseDir은 디렉토리 내 모든 .ssac 파일을 재귀 탐색하여 []ServiceFunc를 반환한다.
 func ParseDir(dir string) ([]ServiceFunc, error) {
 	var funcs []ServiceFunc
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".go") {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".ssac") {
 			return err
 		}
 		sfs, err := ParseFile(path)
@@ -35,7 +35,7 @@ func ParseDir(dir string) ([]ServiceFunc, error) {
 	return funcs, err
 }
 
-// ParseFile은 단일 .go 파일을 파싱하여 []ServiceFunc를 반환한다.
+// ParseFile은 단일 .ssac 파일을 파싱하여 []ServiceFunc를 반환한다.
 func ParseFile(path string) ([]ServiceFunc, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)

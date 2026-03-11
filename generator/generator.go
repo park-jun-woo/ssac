@@ -38,7 +38,7 @@ func GenerateWith(t Target, funcs []parser.ServiceFunc, outDir string, st *valid
 		}
 
 		ext := t.FileExtension()
-		outName := strings.TrimSuffix(sf.FileName, ".go") + ext
+		outName := strings.TrimSuffix(sf.FileName, ".ssac") + ext
 		outPath := outDir
 		if sf.Domain != "" {
 			outPath = filepath.Join(outDir, sf.Domain)

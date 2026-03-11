@@ -288,6 +288,36 @@ func validateModel(sf parser.ServiceFunc, st *SymbolTable) []ValidationError {
 				}
 				sort.Strings(available)
 				errs = append(errs, ctx.err("@"+seq.Type, fmt.Sprintf("%s.%s — 메서드 %q 없음. 사용 가능: %s", seq.Package, modelName, methodName, strings.Join(available, ", "))))
+				continue
+			}
+			// 파라미터 매칭 검증
+			mi := ms.Methods[methodName]
+			if len(mi.Params) > 0 {
+				ifaceParamSet := make(map[string]bool, len(mi.Params))
+				for _, p := range mi.Params {
+					ifaceParamSet[p] = true
+				}
+				ssacKeys := make([]string, 0, len(seq.Inputs))
+				for k := range seq.Inputs {
+					ssacKeys = append(ssacKeys, k)
+				}
+				sort.Strings(ssacKeys)
+				// SSaC에 있지만 interface에 없는 키
+				for _, key := range ssacKeys {
+					if !ifaceParamSet[key] {
+						errs = append(errs, ctx.err("@"+seq.Type, fmt.Sprintf("SSaC ↔ Interface: %s — @model %s.%s.%s 파라미터 불일치. SSaC에 %q가 있지만 interface에 없습니다. interface 파라미터: [%s]", sf.Name, seq.Package, modelName, methodName, key, strings.Join(mi.Params, ", "))))
+					}
+				}
+				// interface에 있지만 SSaC에 없는 파라미터
+				ssacKeySet := make(map[string]bool, len(seq.Inputs))
+				for k := range seq.Inputs {
+					ssacKeySet[k] = true
+				}
+				for _, param := range mi.Params {
+					if !ssacKeySet[param] {
+						errs = append(errs, ctx.err("@"+seq.Type, fmt.Sprintf("SSaC ↔ Interface: %s — @model %s.%s.%s 파라미터 누락. interface에 %q가 필요하지만 SSaC에 없습니다. SSaC 파라미터: [%s]", sf.Name, seq.Package, modelName, methodName, param, strings.Join(ssacKeys, ", "))))
+					}
+				}
 			}
 			continue
 		}
