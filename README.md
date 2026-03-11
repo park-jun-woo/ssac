@@ -150,7 +150,7 @@ When external SSOT (symbol table) is available, `ssac gen` adds:
 - **@subscribe codegen**: `func Name(ctx context.Context, message T) error` — separate from gin handler. Message type is Go struct in .ssac file. Errors → `return fmt.Errorf(...)`. Validation: param required, struct/field existence checked
 - **@call input type validation**: @call inputs field types compared against func Request struct field types. DDL-traced type != Request type → ERROR
 - **Unused variable `_` handling**: Result variables not referenced in subsequent sequences → `_, err` instead of `varName, err`. `:=` vs `=` tracked: `_` + err already declared → `=` (no new variables)
-- **config.* codegen**: `config.SMTPHost` → `config.Get("SMTP_HOST")`. PascalCase → UPPER_SNAKE_CASE. Import `"config"` auto-added. Type-aware: @call Request field type → `GetInt`/`GetInt64`/`GetBool`. Unsupported types → validator ERROR
+- **config.* input rejected**: `config.*` inputs are not supported (validator ERROR). Infrastructure config should use `os.Getenv()` inside the func implementation
 
 ## OpenAPI x- Extensions
 
@@ -214,7 +214,7 @@ files/                           # Design documents
 go test ./parser/... ./validator/... ./generator/... -count=1
 ```
 
-163 tests: parser 41 + validator 75 + generator 47
+158 tests: parser 41 + validator 75 + generator 42
 
 ## License
 

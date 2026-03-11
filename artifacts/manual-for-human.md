@@ -56,7 +56,7 @@ ssac validate specs/dummy-study       # 외부 SSOT 교차 검증 (자동 감지
 | 외부 | 패키지 모델 파라미터 매칭 (SSaC↔interface 불일치/누락 → ERROR) |
 | 외부 | Go 예약어 파라미터명 (DDL 컬럼이 `type`, `range` 등 → ERROR) |
 | 외부 | @call 입력 타입 검증 (DDL 역추적 타입 ≠ Request struct 필드 타입 → ERROR) |
-| 외부 | config 타입 검증 (config.* → 지원 불가 타입 대입 시 ERROR) |
+| 내부 | config.* 입력 거부 (validator ERROR — `os.Getenv()` 사용 안내) |
 
 ### gen
 
@@ -112,7 +112,7 @@ Value 형식: `source.Field` 또는 `"literal"`
 | `request.Name` | HTTP 요청 파라미터 (예약 소스) | `request.CourseID` |
 | `variable.Field` | 이전 결과 변수의 필드 | `course.InstructorID` |
 | `currentUser.Field` | 인증 컨텍스트 (예약 소스) | `currentUser.ID` |
-| `config.Field` | 환경 설정 (예약 소스) → `config.Get("UPPER_SNAKE")` | `config.SMTPHost` → `config.Get("SMTP_HOST")` |
+| ~~`config.Field`~~ | **미지원** (validator ERROR) — func 내부에서 `os.Getenv()` 사용 | — |
 | `query` | QueryOpts (페이지네이션/정렬/필터, 예약 소스) | `query` |
 | `"literal"` | 문자열 리터럴 | `"cancelled"` |
 
@@ -768,34 +768,15 @@ _, err := tokenModel.Generate(key)
 _, err = billing.HoldEscrow(billing.HoldEscrowRequest{Amount: order.Budget})
 ```
 
-### config.* → config.Get() 코드젠 변환
+### config.* 입력 금지
 
-SSaC에서 `config.Field` 사용 시 generator가 `config.Get("UPPER_SNAKE")` 호출로 변환한다.
-@call의 Request struct 필드 타입에 따라 타입별 변환 함수를 사용한다:
+`config.*` 입력값은 SSaC에서 지원하지 않는다. 사용 시 validator ERROR가 발생한다.
 
-| Request 필드 타입 | 생성 코드 |
-|---|---|
-| `string` (기본) | `config.Get("KEY")` |
-| `int` | `config.GetInt("KEY")` |
-| `int32` | `int32(config.GetInt("KEY"))` |
-| `int64` | `config.GetInt64("KEY")` |
-| `bool` | `config.GetBool("KEY")` |
-| 기타 | validator ERROR: 변환 불가 |
-
-```go
-// SSaC:
-// @call mail.Send({Host: config.SMTPHost, MaxRetries: config.MaxRetries, Debug: config.Debug})
-
-// 생성 코드 (Request struct: Host string, MaxRetries int, Debug bool):
-mail.Send(mail.SendRequest{
-    Host: config.Get("SMTP_HOST"),
-    MaxRetries: config.GetInt("MAX_RETRIES"),
-    Debug: config.GetBool("DEBUG"),
-})
+```
+ERROR: config.SMTPHost — config.* 입력은 지원하지 않습니다. func 내부에서 os.Getenv()를 사용하세요
 ```
 
-PascalCase → UPPER_SNAKE_CASE 변환 규칙: 대문자 앞에 `_` 삽입 후 전체 대문자화 (연속 대문자 그룹은 하나로 유지: `SMTP` → `SMTP`).
-config 참조가 있으면 import에 `"config"` 자동 추가.
+인프라 설정(SMTP, DB 등)은 `@call`로 호출되는 func 내부에서 직접 `os.Getenv()`로 읽는다. SSaC `@call`은 비즈니스 데이터만 전달한다.
 
 ### @call 입력 타입 검증
 
