@@ -11,6 +11,7 @@ import (
 
 	"github.com/geul-org/ssac/parser"
 	"github.com/geul-org/ssac/validator"
+	"github.com/ettle/strcase"
 )
 
 // GoTarget은 Go 언어용 코드 생성기다.
@@ -474,7 +475,7 @@ func argToCode(a parser.Arg) string {
 		return "opts"
 	}
 	if a.Source == "request" {
-		return lcFirst(a.Field)
+		return strcase.ToGoCamel(a.Field)
 	}
 	if a.Source == "currentUser" {
 		return a.Source + "." + a.Field
@@ -498,7 +499,7 @@ func buildInputFieldsFromMap(inputs map[string]string) string {
 
 	var fields []string
 	for _, k := range keys {
-		fields = append(fields, ucFirst(k)+": "+inputValueToCode(inputs[k]))
+		fields = append(fields, strcase.ToGoPascal(k)+": "+inputValueToCode(inputs[k]))
 	}
 	return strings.Join(fields, ", ")
 }
@@ -509,7 +510,7 @@ func inputValueToCode(val string) string {
 		return "opts"
 	}
 	if strings.HasPrefix(val, "request.") {
-		return lcFirst(val[len("request."):])
+		return strcase.ToGoCamel(val[len("request."):])
 	}
 	// currentUser.Field, 일반 변수 → 그대로
 	return val
@@ -543,7 +544,7 @@ func buildPublishPayload(inputs map[string]string) string {
 
 	var fields []string
 	for _, k := range keys {
-		fields = append(fields, fmt.Sprintf("\t\t%q: %s,", ucFirst(k), inputValueToCode(inputs[k])))
+		fields = append(fields, fmt.Sprintf("\t\t%q: %s,", strcase.ToGoPascal(k), inputValueToCode(inputs[k])))
 	}
 	return strings.Join(fields, "\n")
 }
@@ -647,7 +648,7 @@ func collectRequestParams(seqs []parser.Sequence, st *validator.SymbolTable, pat
 
 	var params []typedRequestParam
 	for _, rp := range rawParams {
-		varName := lcFirst(rp.name)
+		varName := strcase.ToGoCamel(rp.name)
 		code := generateExtractCode(varName, rp.name, rp.goType)
 		params = append(params, typedRequestParam{
 			name:        rp.name,
@@ -666,7 +667,7 @@ func buildJSONBodyParams(rawParams []struct {
 
 	buf.WriteString("\tvar req struct {\n")
 	for _, rp := range rawParams {
-		buf.WriteString(fmt.Sprintf("\t\t%s %s `json:\"%s\"`\n", rp.name, rp.goType, rp.name))
+		buf.WriteString(fmt.Sprintf("\t\t%s %s `json:\"%s\"`\n", strcase.ToGoPascal(rp.name), rp.goType, rp.name))
 	}
 	buf.WriteString("\t}\n")
 	buf.WriteString("\tif err := c.ShouldBindJSON(&req); err != nil {\n")
@@ -674,8 +675,8 @@ func buildJSONBodyParams(rawParams []struct {
 	buf.WriteString("\t\treturn\n")
 	buf.WriteString("\t}\n")
 	for _, rp := range rawParams {
-		varName := lcFirst(rp.name)
-		buf.WriteString(fmt.Sprintf("\t%s := req.%s\n", varName, rp.name))
+		varName := strcase.ToGoCamel(rp.name)
+		buf.WriteString(fmt.Sprintf("\t%s := req.%s\n", varName, strcase.ToGoPascal(rp.name)))
 	}
 
 	result := []typedRequestParam{{
@@ -734,7 +735,7 @@ func generateExtractCode(varName, paramName, goType string) string {
 }
 
 func generatePathParamCode(pp validator.PathParam) string {
-	varName := lcFirst(pp.Name)
+	varName := strcase.ToGoCamel(pp.Name)
 	switch pp.GoType {
 	case "int64":
 		return fmt.Sprintf("\t%sStr := c.Param(%q)\n"+
@@ -1110,7 +1111,7 @@ func deriveInterfaces(usages []modelUsage, st *validator.SymbolTable) []derivedI
 					continue
 				}
 				dp := derivedParam{
-					Name:   lcFirst(k),
+					Name:   strcase.ToGoCamel(k),
 					GoType: resolveInputParamType(val, usage.ModelName, st),
 				}
 				if dp.Name != "" {
@@ -1135,12 +1136,12 @@ func resolveArgParamName(a parser.Arg) string {
 		return lcFirst(a.Literal) // 리터럴은 값 자체를 이름으로 사용
 	}
 	if a.Source == "request" || a.Source == "currentUser" {
-		return lcFirst(a.Field)
+		return strcase.ToGoCamel(a.Field)
 	}
 	if a.Source != "" {
-		return a.Source + ucFirst(a.Field)
+		return a.Source + strcase.ToGoPascal(a.Field)
 	}
-	return lcFirst(a.Field)
+	return strcase.ToGoCamel(a.Field)
 }
 
 func resolveArgParamType(a parser.Arg, modelName string, st *validator.SymbolTable) string {

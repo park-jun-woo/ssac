@@ -783,6 +783,43 @@ func TestGenerateUnusedVarFirstErr(t *testing.T) {
 	assertContains(t, code, `_, err := tokenModel.Generate`)
 }
 
+func TestGenerateRequestStructExported(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name: "CreateUser", FileName: "create_user.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqPost, Model: "User.Create", Inputs: map[string]string{"email": "request.email"}, Result: &parser.Result{Type: "User", Var: "user"}},
+			{Type: parser.SeqResponse, Fields: map[string]string{"user": "user"}},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	assertContains(t, code, "Email string `json:\"email\"`")
+	assertContains(t, code, "email := req.Email")
+}
+
+func TestGenerateRequestStructSnakeCase(t *testing.T) {
+	st := &validator.SymbolTable{
+		DDLTables: map[string]validator.DDLTable{
+			"bids": {Columns: map[string]string{"bid_amount": "int32", "id": "int64"}},
+		},
+		Operations: map[string]validator.OperationSymbol{},
+		Models:     map[string]validator.ModelSymbol{},
+	}
+	sf := parser.ServiceFunc{
+		Name: "PlaceBid", FileName: "place_bid.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqPost, Model: "Bid.Place", Inputs: map[string]string{"bid_amount": "request.bid_amount", "id": "request.id"}, Result: &parser.Result{Type: "Bid", Var: "bid"}},
+			{Type: parser.SeqResponse, Fields: map[string]string{"bid": "bid"}},
+		},
+	}
+	code := mustGenerate(t, sf, st)
+	assertContains(t, code, "`json:\"bid_amount\"`")
+	assertContains(t, code, "BidAmount int32")
+	assertContains(t, code, "`json:\"id\"`")
+	assertContains(t, code, "ID ")
+	assertContains(t, code, "bidAmount := req.BidAmount")
+	assertContains(t, code, "id := req.ID")
+}
+
 // --- helpers ---
 
 func mustGenerate(t *testing.T, sf parser.ServiceFunc, st *validator.SymbolTable) string {
