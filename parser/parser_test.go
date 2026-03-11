@@ -636,7 +636,7 @@ type OnOrderCompletedMessage struct {
 	OrderID int64
 }
 
-// @subscribe "order.completed" OnOrderCompletedMessage
+// @subscribe "order.completed"
 // @get Order order = Order.FindByID({ID: message.OrderID})
 func OnOrderCompleted(message OnOrderCompletedMessage) {}
 `
@@ -662,7 +662,7 @@ type OnOrderCompletedMessage struct {
 	Email   string
 }
 
-// @subscribe "order.completed" OnOrderCompletedMessage
+// @subscribe "order.completed"
 // @get Order order = Order.FindByID({ID: message.OrderID})
 // @call mail.SendEmail({To: message.Email, Subject: "done"})
 // @put Order.UpdateNotified({ID: order.ID, Notified: "true"})
@@ -690,7 +690,7 @@ type MyMsg struct {
 	ID int64
 }
 
-// @subscribe "test.topic" MyMsg
+// @subscribe "test.topic"
 // @get Order order = Order.FindByID({ID: message.ID})
 func OnTest(message MyMsg) {}
 `
@@ -712,7 +712,7 @@ type OnOrderCompletedMessage struct {
 	Amount  int64
 }
 
-// @subscribe "order.completed" OnOrderCompletedMessage
+// @subscribe "order.completed"
 // @get Order order = Order.FindByID({ID: message.OrderID})
 func OnOrderCompleted(message OnOrderCompletedMessage) {}
 `

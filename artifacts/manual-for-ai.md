@@ -135,7 +135,7 @@ type OnOrderCompletedMessage struct {
     Email   string
 }
 
-// @subscribe "order.completed" OnOrderCompletedMessage
+// @subscribe "order.completed"
 // @get Order order = Order.FindByID({ID: message.OrderID})
 func OnOrderCompleted(message OnOrderCompletedMessage) {}
 ```
@@ -145,7 +145,7 @@ func OnOrderCompleted(message OnOrderCompletedMessage) {}
 - Function signature: `func Name(message TypeName) {}` — param name must be `message`
 - `message` replaces `request` as input source: `message.OrderID`, `message.Email`
 - Validation: no `@response`, no `request` usage, no `message` in HTTP func, param required, struct type exists, field exists
-- Parser IR: `ServiceFunc.Subscribe = &SubscribeInfo{Topic: "...", MessageType: "..."}`, `ServiceFunc.Param = &ParamInfo{...}`, `ServiceFunc.Structs = [...]`
+- Parser IR: `ServiceFunc.Subscribe = &SubscribeInfo{Topic: "...", MessageType: "..."}` (MessageType는 함수 파라미터에서 자동 추출), `ServiceFunc.Param = &ParamInfo{...}`, `ServiceFunc.Structs = [...]`
 - Codegen: `func Name(ctx context.Context, message T) error` — not gin handler. Errors → `return fmt.Errorf(...)`, success → `return nil`
 
 ### Response — Field Mapping Block

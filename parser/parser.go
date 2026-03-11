@@ -92,10 +92,11 @@ func ParseFile(path string) ([]ServiceFunc, error) {
 		var filtered []Sequence
 		for _, seq := range sequences {
 			if seq.Type == "subscribe" {
-				sf.Subscribe = &SubscribeInfo{
-					Topic:       seq.Topic,
-					MessageType: seq.Target,
+				si := &SubscribeInfo{Topic: seq.Topic}
+				if sf.Param != nil {
+					si.MessageType = sf.Param.TypeName
 				}
+				sf.Subscribe = si
 				continue
 			}
 			filtered = append(filtered, seq)
@@ -212,10 +213,8 @@ func parseLine(line string) (*Sequence, bool, error) {
 	case strings.HasPrefix(line, "@publish "):
 		seq, err = parsePublish(line[9:])
 	case strings.HasPrefix(line, "@subscribe "):
-		rest := strings.TrimSpace(line[11:])
-		topic, rest := extractQuoted(rest)
-		msgType := strings.TrimSpace(rest)
-		seq = &Sequence{Type: "subscribe", Topic: topic, Target: msgType}
+		topic, _ := extractQuoted(strings.TrimSpace(line[11:]))
+		seq = &Sequence{Type: "subscribe", Topic: topic}
 	case strings.HasPrefix(line, "@call "):
 		seq, err = parseCall(line[6:])
 	default:

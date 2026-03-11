@@ -81,7 +81,7 @@ func CreateSession(c *gin.Context) {
 | `publish` | `@publish "topic" {Key: value} [{options}]` | Async event publishing |
 | `response` | `@response { field: var }` or `@response var` | Return response (block or shorthand) |
 | **Trigger** | | |
-| `subscribe` | `@subscribe "topic" TypeName` | Queue event trigger (function-level, typed message) |
+| `subscribe` | `@subscribe "topic"` | Queue event trigger (message type from func param) |
 
 All sequence types use unified `{Key: value}` syntax. Value format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`), `query` (QueryOpts), or `"literal"`. Result types support generic wrappers: `Page[T]` (offset pagination), `Cursor[T]` (cursor pagination).
 

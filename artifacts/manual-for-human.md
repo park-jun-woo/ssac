@@ -419,11 +419,11 @@ queue.Publish(c.Request.Context(), "cart.abandoned", map[string]any{
 ### @subscribe — 큐 이벤트 트리거
 
 ```go
-// @subscribe "{topic}" {TypeName}
+// @subscribe "{topic}"
 ```
 
 함수 레벨 트리거. HTTP 트리거 대신 큐 이벤트를 수신하여 함수를 실행한다.
-메시지 타입은 같은 .ssac 파일에 Go struct로 선언한다. 함수 시그니처에도 타입을 명시한다.
+메시지 타입은 같은 .ssac 파일에 Go struct로 선언하고, 함수 파라미터로 타입을 명시한다. 파서가 함수 시그니처에서 타입을 자동 추출한다.
 
 ```go
 type OnOrderCompletedMessage struct {
@@ -432,7 +432,7 @@ type OnOrderCompletedMessage struct {
     Amount  int64
 }
 
-// @subscribe "order.completed" OnOrderCompletedMessage
+// @subscribe "order.completed"
 // @get Order order = Order.FindByID({ID: message.OrderID})
 // @call mail.SendEmail({To: message.Email, Subject: "주문 완료"})
 // @put Order.UpdateNotified({ID: order.ID, Notified: "true"})

@@ -50,7 +50,7 @@ ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블
 // @auth "action" "resource" {inputs} "message"             — 권한 검사 (403)
 // @call Type var = pkg.Func({Key: value, ...})             — 외부 함수 호출 (result 있음/없음)
 // @publish "topic" {Key: value, ...}                       — 이벤트 발행 (옵션: {delay: 1800})
-// @subscribe "topic" TypeName                              — 큐 이벤트 트리거 (Go struct 타입, func Name(message T) {})
+// @subscribe "topic"                                       — 큐 이벤트 트리거 (타입은 func 파라미터에서 추출)
 // @response { field: var, field: var.Member }              — 응답 (멀티라인 블록)
 // @response varName                                        — 응답 간단쓰기 (직접 반환)
 // @type! — 모든 시퀀스에 ! 접미사로 WARNING 억제 (e.g. @delete!, @response!)
