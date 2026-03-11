@@ -39,6 +39,7 @@ ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블
 
 ```go
 // @get Type var = Model.Method({Key: value, ...})          — 리소스 조회 (result 필수)
+// @get Page[Type] var = Model.Method({Key: value, ...})    — 페이지네이션 조회 (Page 또는 Cursor 래퍼)
 // @post Type var = Model.Method({Key: value, ...})         — 리소스 생성 (result 필수)
 // @put Model.Method({Key: value, ...})                     — 리소스 수정 (result 없음)
 // @delete Model.Method({Key: value, ...})                  — 리소스 삭제 (result 없음)
@@ -48,6 +49,7 @@ ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블
 // @auth "action" "resource" {inputs} "message"             — 권한 검사 (403)
 // @call Type var = pkg.Func({Key: value, ...})             — 외부 함수 호출 (result 있음/없음)
 // @response { field: var, field: var.Member }              — 응답 (멀티라인 블록)
+// @response varName                                        — 응답 간단쓰기 (직접 반환)
 // @type! — 모든 시퀀스에 ! 접미사로 WARNING 억제 (e.g. @delete!, @response!)
 ```
 
@@ -125,7 +127,7 @@ files/                           # 기초 자료
 생성 코드는 gin 프레임워크 사용:
 - 함수 시그니처: `func Name(c *gin.Context)`
 - Path params: `c.Param()` + 타입 변환
-- Request body: `c.ShouldBindJSON(&req)` (2+ request 파라미터) 또는 `c.Query()`
+- Request body: `c.ShouldBindJSON(&req)` (2+ request 파라미터, 또는 POST/PUT에서 1+) 또는 `c.Query()`
 - currentUser: `c.MustGet("currentUser").(*model.CurrentUser)` — @auth 또는 args에서 currentUser 참조 시 자동 생성
 
 심볼 테이블(외부 SSOT)이 있을 때 추가되는 기능:
@@ -134,7 +136,10 @@ files/                           # 기초 자료
 - **Guard 값 타입**: result 타입에 따른 zero value 비교 (int→`== 0`/`> 0`, pointer→`== nil`/`!= nil`)
 - **Stale 데이터 경고**: put/delete 후 갱신 없이 response에 사용하면 WARNING
 - **QueryOpts**: SSaC에 `query` 예약 소스가 명시된 메서드에만 `opts QueryOpts` 전달 (암묵적 삽입 없음). `Model.List({..., query: query})`
-- **List 3-tuple 반환**: many + QueryOpts → `result, total, err :=` (count 포함)
+- **List 3-tuple 반환**: many + QueryOpts → `result, total, err :=` (count 포함). Page[T]/Cursor[T] 사용 시 불필요
+- **Page[T]/Cursor[T] 제네릭**: `Result.Wrapper`로 래퍼 타입 추적. 모델 반환: `(*pagination.Page[T], error)`
+- **x-pagination 타입 교차검증**: offset↔Page, cursor↔Cursor 불일치 → ERROR
+- **@response 간단쓰기**: `@response var` → `c.JSON(200, var)`. Wrapper 고정 필드 OpenAPI 교차 검증 (Page: items/total, Cursor: items/next_cursor/has_next)
 - **모델 인터페이스 파생**: 3 SSOT 교차(sqlc 카디널리티 + SSaC Inputs + OpenAPI x-확장) → `<outDir>/model/models_gen.go`
 - **도메인 폴더 구조**: `service/<domain>/*.go` 필수 (flat service/*.go는 ERROR). `service/auth/login.go` → `Domain="auth"` → `outDir/auth/login.go`, `package auth`
 - **@call 코드젠**: `@call pkg.Func({Key: value})` → `pkg.Func(pkg.FuncRequest{Key: value, ...})`. result 없음→`_, err` guard형(401), 있음→value형(500)

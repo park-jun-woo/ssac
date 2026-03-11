@@ -20,10 +20,16 @@ Go 1.24+, `go/ast` (parsing), `text/template` (codegen), `gopkg.in/yaml.v3` (Ope
 
 ```go
 // @get Type var = Model.Method({Key: value, ...})        — Query (result required)
+// @get Page[Type] var = Model.Method({Key: value, ...})  — Paginated query (Page or Cursor wrapper)
 // @post Type var = Model.Method({Key: value, ...})       — Create (result required)
 // @put Model.Method({Key: value, ...})                   — Update (no result)
 // @delete Model.Method({Key: value, ...})                — Delete (no result)
 ```
+
+**Generic result types**: `Page[T]` and `Cursor[T]` wrappers for paginated results.
+- Parser IR: `Result.Wrapper` = `"Page"` or `"Cursor"`, `Result.Type` = inner type
+- Model interface returns `(*pagination.Page[T], error)` or `(*pagination.Cursor[T], error)`
+- No 3-tuple return when Wrapper is used (Page/Cursor struct contains total/cursor internally)
 
 All sequence types use unified `{Key: value}` syntax for args (CRUD, @call, @state, @auth).
 
@@ -114,6 +120,10 @@ Target: variable (`course`) or variable.field (`course.InstructorID`)
 - No runtime functions (`len` etc.) — aggregation belongs in SQL
 - Permission-based response differences → separate service functions (no conditionals)
 
+**Shorthand**: `@response varName` → `c.JSON(http.StatusOK, varName)` (direct struct return, no gin.H)
+- Used with Page[T]/Cursor[T] types where the struct is returned directly
+- Handler skips pagination import (model handles the type internally)
+
 ## Full Example
 
 ```go
@@ -175,9 +185,9 @@ Auto-detected by `ssac validate <project-root>`:
 Generated code uses **gin** framework (`c *gin.Context`):
 - Function signature: `func Name(c *gin.Context)`
 - Error responses: `c.JSON(status, gin.H{"error": "msg"})`
-- Success responses: `c.JSON(http.StatusOK, gin.H{...})` with field mapping from `@response`
+- Success responses: `c.JSON(http.StatusOK, gin.H{...})` with field mapping, or `c.JSON(http.StatusOK, var)` for `@response var` shorthand
 - Path params: `c.Param("Name")` + type conversion
-- Request body: `c.ShouldBindJSON(&req)` (2+ request params) or `c.Query("Name")` (single)
+- Request body: `c.ShouldBindJSON(&req)` (2+ request params, or 1+ in POST/PUT) or `c.Query("Name")` (single GET/DELETE)
 - currentUser: `c.MustGet("currentUser").(*model.CurrentUser)` — auto-generated when @auth or args reference currentUser
 
 Additional features when symbol table (external SSOT) is available:
@@ -190,8 +200,10 @@ Additional features when symbol table (external SSOT) is available:
 - **@dto tag**: `// @dto` annotated struct → skips DDL table matching
 - **DDL FK/Index parsing**: REFERENCES (inline/constraint), CREATE INDEX → `DDLTable.ForeignKeys`, `DDLTable.Indexes`
 - **QueryOpts**: `query` reserved source in args → `opts := QueryOpts{}` + `c.Query()` parsing. No implicit injection.
-- **List 3-tuple return**: `query` arg + `[]Type` result → `result, total, err :=` (includes count)
+- **List 3-tuple return**: `query` arg + `[]Type` result → `result, total, err :=` (includes count). Not used with Page[T]/Cursor[T] wrappers.
 - **Query cross-validation**: OpenAPI x-extensions ↔ SSaC `query` mismatch detection (ERROR/WARNING)
+- **x-pagination type validation**: `offset` ↔ `Page[T]`, `cursor` ↔ `Cursor[T]` cross-check. No x-pagination + Wrapper → ERROR
+- **Wrapper field validation**: `@response var` shorthand with Page[T] → OpenAPI must have `items`, `total`. Cursor[T] → `items`, `next_cursor`, `has_next`
 - **Model interface derivation**: 3 SSOT sources → `<outDir>/model/models_gen.go`
   - sqlc: method names, cardinality (:one→`*T`, :many→`[]T`, :exec→`error`)
   - SSaC: all inputs included (request, currentUser, variable refs, literals→DDL reverse-mapping, query→`opts QueryOpts`)
@@ -239,4 +251,4 @@ Codegen effects:
 - Filenames: snake_case, variables/functions: camelCase, types: PascalCase
 - Go common initialisms: `ID`, `URL`, `HTTP`, `API` etc. — all-caps (exported) or all-lowercase (unexported first word)
 - Tests: `go test ./parser/... ./validator/... ./generator/... -count=1`
-- 83 tests: parser 26 + validator 34 + generator 23
+- 106 tests: parser 30 + validator 49 + generator 27

@@ -153,13 +153,21 @@ specs/service/
 
 ```go
 // @get {Type} {var} = {Model}.{Method}({Key: value, ...})
+// @get Page[{Type}] {var} = {Model}.{Method}({Key: value, ...})   — 페이지네이션
+// @get Cursor[{Type}] {var} = {Model}.{Method}({Key: value, ...}) — 커서 페이지네이션
 ```
 
 ```go
 // @get Course course = Course.FindByID({courseID: request.CourseID})
 // @get User instructor = User.FindByID({userID: course.InstructorID})
 // @get []Reservation reservations = Reservation.ListByRoom({roomID: request.RoomID})
+// @get Page[Gig] gigPage = Gig.List({query: query})
 ```
+
+**제네릭 래퍼 타입**: `Page[T]`(offset 페이지네이션), `Cursor[T]`(커서 페이지네이션)
+- 모델 인터페이스 반환: `(*pagination.Page[T], error)` 또는 `(*pagination.Cursor[T], error)`
+- Wrapper 사용 시 3-tuple 반환 불필요 (Page/Cursor struct가 total/cursor 포함)
+- `x-pagination: offset` ↔ `Page[T]`, `x-pagination: cursor` ↔ `Cursor[T]` 교차 검증
 
 코드젠:
 ```go
@@ -340,7 +348,9 @@ if err != nil {
 }
 ```
 
-### @response — 응답 반환 (필드 매핑 블록)
+### @response — 응답 반환
+
+**풀어쓰기 (필드 매핑 블록)**:
 
 ```go
 // @response {
@@ -349,6 +359,17 @@ if err != nil {
 //   {필드명}: "{리터럴}"
 // }
 ```
+
+**간단쓰기 (직접 반환)**:
+
+```go
+// @response {변수명}
+```
+
+간단쓰기는 `c.JSON(http.StatusOK, varName)`으로 struct를 직접 반환한다. Page[T]/Cursor[T]와 함께 사용:
+- `Page[T]` → OpenAPI에 `items`, `total` 필드 검증
+- `Cursor[T]` → OpenAPI에 `items`, `next_cursor`, `has_next` 필드 검증
+- handler에서 pagination import 불필요 (model이 타입을 내부 처리)
 
 서비스 레이어의 책임: 모델 결과를 OpenAPI response schema에 맞춰 필드별 매핑.
 권한별 응답 차이는 서비스 함수 분리로 해결 (조건 분기 금지).
@@ -367,13 +388,18 @@ if err != nil {
 // }
 ```
 
-코드젠:
+코드젠 (풀어쓰기):
 ```go
 c.JSON(http.StatusOK, gin.H{
     "course":          course,
     "instructor_name": instructor.Name,
     "reviews":         reviews,
 })
+```
+
+코드젠 (간단쓰기):
+```go
+c.JSON(http.StatusOK, gigPage)
 ```
 
 ### @message 기본값
@@ -531,6 +557,9 @@ SSaC spec에서 `query` 예약 소스를 명시적으로 사용해야 한다:
 교차 검증:
 - OpenAPI에 x-extensions 있는데 SSaC에 `query` 없으면 **WARNING**
 - SSaC에 `query` 있는데 OpenAPI에 x-extensions 없으면 **ERROR**
+- `x-pagination: offset` + `Page[T]` 아닌 결과 → **ERROR**
+- `x-pagination: cursor` + `Cursor[T]` 아닌 결과 → **ERROR**
+- `x-pagination` 없음 + `Page[T]`/`Cursor[T]` 사용 → **ERROR**
 
 ---
 

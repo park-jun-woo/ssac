@@ -461,6 +461,7 @@ func TestGenerateResponseDirect(t *testing.T) {
 	code := mustGenerate(t, sf, nil)
 	assertContains(t, code, `c.JSON(http.StatusOK, gigPage)`)
 	assertNotContains(t, code, `c.JSON(http.StatusOK, gin.H`)
+	assertNotContains(t, code, `pagination`)
 }
 
 func TestGeneratePageReturnType(t *testing.T) {

@@ -78,9 +78,9 @@ func CreateSession(c *gin.Context) {
 | `state` | `@state id {inputs} "transition" "msg"` | State transition check (409) |
 | `auth` | `@auth "action" "resource" {inputs} "msg"` | Permission check (403) |
 | `call` | `@call [Type var =] pkg.Func({Key: value})` | External function call |
-| `response` | `@response { field: var }` | Return response (multi-line block) |
+| `response` | `@response { field: var }` or `@response var` | Return response (block or shorthand) |
 
-All sequence types use unified `{Key: value}` syntax. Value format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`), `query` (QueryOpts), or `"literal"`.
+All sequence types use unified `{Key: value}` syntax. Value format: `source.Field` (e.g. `request.CourseID`, `course.InstructorID`, `currentUser.ID`), `query` (QueryOpts), or `"literal"`. Result types support generic wrappers: `Page[T]` (offset pagination), `Cursor[T]` (cursor pagination).
 
 Reserved sources (`request`, `currentUser`, `config`, `query`) cannot be used as result variable names. Append `!` to any type to suppress WARNINGs (e.g. `@delete!`, `@response!`).
 
@@ -117,7 +117,7 @@ ssac validate specs/backend/service  # Internal validation only
 
 Generated code uses **gin** framework (`func Name(c *gin.Context)`):
 - Path params: `c.Param()` + type conversion
-- Request body: `c.ShouldBindJSON(&req)` or `c.Query()`
+- Request body: `c.ShouldBindJSON(&req)` (2+ params, or 1+ in POST/PUT) or `c.Query()`
 - currentUser: `c.MustGet("currentUser").(*model.CurrentUser)` — auto-generated when needed
 - Error responses: `c.JSON(status, gin.H{"error": "msg"})` with early return
 - Success responses: `c.JSON(http.StatusOK, gin.H{...})` with field mapping from `@response`
@@ -128,7 +128,10 @@ When external SSOT (symbol table) is available, `ssac gen` adds:
 - **`:=` vs `=` tracking**: Go variable re-declaration uses `=` for already-declared variables
 - **Go naming conventions**: Initialism-aware naming (e.g. `ID`→`id`, `URL`→`url`)
 - **QueryOpts**: `query` reserved source in args → `opts := QueryOpts{}` + `c.Query()` parsing (no implicit injection)
-- **List 3-tuple return**: `query` arg + `[]Type` result → `result, total, err :=` (includes count)
+- **List 3-tuple return**: `query` arg + `[]Type` result → `result, total, err :=` (includes count). Not used with Page[T]/Cursor[T].
+- **Page[T]/Cursor[T] generics**: `Result.Wrapper` tracks generic wrapper. Model returns `(*pagination.Page[T], error)`.
+- **x-pagination type validation**: `offset` ↔ `Page[T]`, `cursor` ↔ `Cursor[T]` cross-check
+- **@response shorthand**: `@response var` → `c.JSON(200, var)`. Wrapper fields validated against OpenAPI (Page: items/total, Cursor: items/next_cursor/has_next)
 - **Query cross-validation**: OpenAPI x-extensions ↔ SSaC `query` mismatch detection (ERROR/WARNING)
 - **Model interface derivation**: Crosses 3 SSOT sources → `<outDir>/model/models_gen.go`
   - sqlc: method names + cardinality (`:one`→`*T`, `:many`→`[]T`, `:exec`→`error`)
@@ -202,7 +205,7 @@ files/                           # Design documents
 go test ./parser/... ./validator/... ./generator/... -count=1
 ```
 
-83 tests: parser 26 + validator 34 + generator 23
+106 tests: parser 30 + validator 49 + generator 27
 
 ## License
 

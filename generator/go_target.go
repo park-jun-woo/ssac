@@ -577,7 +577,17 @@ func collectImports(sf parser.ServiceFunc, reqParams []typedRequestParam, pathPa
 			seen["authz"] = true
 		}
 		if seq.Result != nil && seq.Result.Wrapper != "" {
-			seen["github.com/geul-org/fullend/pkg/pagination"] = true
+			// 간단쓰기(@response varName)면 handler에서 pagination 직접 참조 없음
+			hasDirectResponse := false
+			for _, s := range sf.Sequences {
+				if s.Type == parser.SeqResponse && s.Target != "" {
+					hasDirectResponse = true
+					break
+				}
+			}
+			if !hasDirectResponse {
+				seen["github.com/geul-org/fullend/pkg/pagination"] = true
+			}
 		}
 	}
 
