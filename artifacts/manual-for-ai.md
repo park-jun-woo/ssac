@@ -104,6 +104,7 @@ Target: variable (`course`) or variable.field (`course.InstructorID`)
 - `{inputs}`: JSON-style context for OPA policy (ownership, org, etc.)
 - Codegen: `authz.Check(authz.CheckRequest{Action: "action", Resource: "resource", ...})`
 - `currentUser` auto-extracted only if inputs reference `currentUser.*`
+- When `currentUser.*` is referenced, `Role: currentUser.Role` is auto-added (for OPA `input.claims.role`)
 
 ### Call — External Function
 
@@ -252,7 +253,7 @@ Additional features when symbol table (external SSOT) is available:
   - OpenAPI x-: infrastructure params validated against SSaC `query` usage
 - **Domain folder structure**: `service/<domain>/*.go` required (flat service/*.go is ERROR). `service/auth/login.go` → `Domain="auth"` → `outDir/auth/login.go`, `package auth`
 - **@state codegen**: `@state {id} {inputs} "transition"` → `err := {id}state.CanTransition({id}state.Input{...}, "transition")` (error return), import `"states/{id}state"`
-- **@auth codegen**: `@auth "action" "resource" {inputs}` → `authz.Check(authz.CheckRequest{Action: "action", Resource: "resource", ...})` (403 Forbidden). `currentUser` auto-extracted only if inputs reference `currentUser.*`
+- **@auth codegen**: `@auth "action" "resource" {inputs}` → `authz.Check(authz.CheckRequest{Action: "action", Resource: "resource", ...})` (403 Forbidden). `currentUser` auto-extracted only if inputs reference `currentUser.*`. When `currentUser.*` is referenced, `Role: currentUser.Role` auto-added for OPA policy
 - **@call codegen**: `@call pkg.Func({Key: value})` → `pkg.Func(pkg.FuncRequest{Key: value, ...})`. No result → `_, err` guard-style (401), with result → value-style (500)
 - **@call input type validation**: @call inputs field types compared against func Request struct field types. DDL-traced type != Request type → ERROR
 - **config.* input rejected**: `config.*` inputs not supported (validator ERROR). Infrastructure config → `os.Getenv()` inside func
@@ -262,7 +263,8 @@ Additional features when symbol table (external SSOT) is available:
 - **Go reserved word validation**: DDL column names that are Go keywords (`type`, `range`, `select`, etc.) → ERROR with table name and rename suggestion. Prevents `models_gen.go` compile errors.
 - **@publish codegen**: `@publish "topic" {payload}` → `queue.Publish(c.Request.Context(), "topic", map[string]any{...})` (HTTP) or `queue.Publish(ctx, ...)` (subscribe). Options: `queue.WithDelay()`, `queue.WithPriority()`. Import `"queue"` auto-added.
 - **@subscribe codegen**: `func Name(ctx context.Context, message T) error`. Errors → `return fmt.Errorf(...)`, success → `return nil`. No gin dependency. Message type is Go struct in same .ssac file.
-- **Subscribe validation**: param required, param name must be `message`, MessageType must exist as struct, `message.Field` must exist in struct. No `@response`, no `request` usage.
+- **Subscribe validation**: param required, param name must be `message`, MessageType must exist as struct, `message.Field` must exist in struct. No `@response`, no `request` usage, no `query` usage.
+- **@publish validation**: `query` reserved source cannot be used in @publish inputs (HTTP-only)
 
 Singularization rules (sqlc filename → model name): `ies`→`y`, `sses`→`ss`, `xes`→`x`, otherwise remove trailing `s`
 
@@ -301,4 +303,4 @@ Codegen effects:
 - Filenames: snake_case, variables/functions: camelCase, types: PascalCase
 - Go common initialisms: `ID`, `URL`, `HTTP`, `API` etc. — all-caps (exported) or all-lowercase (unexported first word)
 - Tests: `go test ./parser/... ./validator/... ./generator/... -count=1`
-- 158 tests: parser 41 + validator 75 + generator 42
+- 165 tests: parser 43 + validator 77 + generator 45

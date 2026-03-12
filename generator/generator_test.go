@@ -694,6 +694,7 @@ func TestGenerateAuthCallStyle(t *testing.T) {
 	code := mustGenerate(t, sf, nil)
 	assertContains(t, code, `authz.Check(authz.CheckRequest{Action: "AcceptProposal", Resource: "gig"`)
 	assertContains(t, code, `ResourceID: gig.ClientID`)
+	assertContains(t, code, `Role: currentUser.Role`)
 	assertContains(t, code, `UserID: currentUser.ID`)
 	assertContains(t, code, `http.StatusForbidden`)
 	assertNotContains(t, code, `authz.Input{`)
@@ -709,6 +710,7 @@ func TestGenerateAuthNoCurrentUser(t *testing.T) {
 	code := mustGenerate(t, sf, nil)
 	// @auth inputs에 currentUser 없으면 currentUser 추출 코드 없음
 	assertNotContains(t, code, `c.MustGet("currentUser")`)
+	assertNotContains(t, code, `Role:`)
 	assertContains(t, code, `authz.Check(authz.CheckRequest{`)
 }
 

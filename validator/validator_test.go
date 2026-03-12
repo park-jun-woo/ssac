@@ -1223,3 +1223,28 @@ func TestValidateConfigInputRejected(t *testing.T) {
 	errs := Validate(funcs)
 	assertHasError(t, errs, "config.* 입력은 지원하지 않습니다")
 }
+
+func TestValidatePublishQueryRejected(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "CreateOrder", FileName: "create_order.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqPublish, Topic: "order.created", Inputs: map[string]string{"Filter": "query"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "query는 HTTP 전용입니다")
+}
+
+func TestValidateSubscribeQueryRejected(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "OnOrder", FileName: "on_order.go",
+		Subscribe: &parser.SubscribeInfo{Topic: "order.created", MessageType: "OrderMsg"},
+		Param:     &parser.ParamInfo{TypeName: "OrderMsg", VarName: "message"},
+		Structs:   []parser.StructInfo{{Name: "OrderMsg", Fields: []parser.StructField{{Name: "ID", Type: "string"}}}},
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Order.FindByID", Inputs: map[string]string{"ID": "message.ID", "Filter": "query"}, Result: &parser.Result{Type: "Order", Var: "order"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "query는 HTTP 전용입니다")
+}

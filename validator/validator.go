@@ -201,6 +201,11 @@ func validateVariableFlow(sf parser.ServiceFunc) []ValidationError {
 				errs = append(errs, ctx.err("@"+seq.Type, fmt.Sprintf("config.%s — config.* 입력은 지원하지 않습니다. func 내부에서 os.Getenv()를 사용하세요", val[len("config."):])))
 				continue
 			}
+			// @publish에서 query 사용 금지
+			if seq.Type == parser.SeqPublish && (val == "query" || strings.HasPrefix(val, "query.")) {
+				errs = append(errs, ctx.err("@publish", "query는 HTTP 전용입니다 — @publish에서 사용할 수 없습니다"))
+				continue
+			}
 			ref := rootVar(val)
 			if ref != "request" && ref != "currentUser" && ref != "query" && ref != "" && !declared[ref] {
 				errs = append(errs, ctx.err("@"+seq.Type, fmt.Sprintf("%q 변수가 아직 선언되지 않았습니다", ref)))
@@ -845,6 +850,16 @@ func validateSubscribeRules(sf parser.ServiceFunc) []ValidationError {
 				if strings.HasPrefix(val, "request.") {
 					seqCtx := errCtx{sf.FileName, sf.Name, i}
 					errs = append(errs, seqCtx.err("@subscribe", "@subscribe 함수에서 request를 사용할 수 없습니다 — message를 사용하세요"))
+					break
+				}
+			}
+		}
+		// subscribe 함수에서 query 사용하면 ERROR
+		for i, seq := range sf.Sequences {
+			for _, val := range seq.Inputs {
+				if val == "query" || strings.HasPrefix(val, "query.") {
+					seqCtx := errCtx{sf.FileName, sf.Name, i}
+					errs = append(errs, seqCtx.err("@subscribe", "query는 HTTP 전용입니다 — @subscribe 함수에서 사용할 수 없습니다"))
 					break
 				}
 			}

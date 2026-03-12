@@ -334,7 +334,7 @@ if _, err := authz.Check(authz.CheckRequest{Action: "cancel", Resource: "reserva
 }
 ```
 
-`currentUser`는 inputs에 `currentUser.*`가 참조될 때만 자동 추출된다.
+`currentUser`는 inputs에 `currentUser.*`가 참조될 때만 자동 추출된다. 이때 `Role: currentUser.Role`도 자동으로 추가되어 OPA 정책의 `input.claims.role` 검사를 지원한다.
 
 ### @call — 외부 함수 호출
 
@@ -481,6 +481,8 @@ func OnOrderCompleted(ctx context.Context, message OnOrderCompletedMessage) erro
 | HTTP 함수에서 `message` 사용 | ERROR |
 | `@publish` topic 빈 문자열 | ERROR |
 | `@publish` payload 없음 | ERROR |
+| `@publish`에서 `query` 사용 | ERROR |
+| `@subscribe` 함수에서 `query` 사용 | ERROR |
 
 ### @response — 응답 반환
 

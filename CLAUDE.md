@@ -148,7 +148,7 @@ files/                           # 기초 자료
 - **도메인 폴더 구조**: `service/<domain>/*.ssac` 필수 (flat service/*.ssac는 ERROR). `service/auth/login.ssac` → `Domain="auth"` → `outDir/auth/login.go`, `package auth`
 - **@call 코드젠**: `@call pkg.Func({Key: value})` → `pkg.Func(pkg.FuncRequest{Key: value, ...})`. result 없음→`_, err` guard형(401), 있음→value형(500)
 - **@state 코드젠**: `err := {id}state.CanTransition({id}state.Input{...}, "transition")` (error 반환), import `"states/{id}state"`
-- **@auth 코드젠**: `authz.Check(authz.CheckRequest{Action: "action", Resource: "resource", ...})` (403). `currentUser`는 inputs에 `currentUser.*` 참조 시에만 자동 추출
+- **@auth 코드젠**: `authz.Check(authz.CheckRequest{Action: "action", Resource: "resource", ...})` (403). `currentUser`는 inputs에 `currentUser.*` 참조 시에만 자동 추출. `currentUser.*` 참조 시 `Role: currentUser.Role` 자동 추가 (OPA policy 지원)
 - **Spec 파일 imports**: spec 파일의 Go import 선언이 생성 코드에 전달됨
 - **패키지 접두사 모델**: `pkg.Model.Method({...})` — 소문자 접두사 → 패키지 Go interface 교차 검증. interface 없으면 WARNING, 메서드 없으면 ERROR + 사용 가능 목록. 파라미터 매칭: SSaC keys ↔ interface params (`context.Context` 제외). `models_gen.go` 제외. `Sequence.Package` 필드로 추적
 - **@publish 코드젠**: `queue.Publish(c.Request.Context(), ...)` (HTTP) / `queue.Publish(ctx, ...)` (subscribe). 옵션: `queue.WithDelay()`, `queue.WithPriority()`. import `"queue"` 자동 추가
