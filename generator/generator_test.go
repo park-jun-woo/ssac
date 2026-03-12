@@ -226,7 +226,7 @@ func TestGenerateQueryArg(t *testing.T) {
 	}
 	code := mustGenerate(t, sf, st)
 	assertContains(t, code, `opts := QueryOpts{}`)
-	assertContains(t, code, `reservationModel.ListByUserID(opts, currentUser.ID)`)
+	assertContains(t, code, `reservationModel.ListByUserID(currentUser.ID, opts)`)
 	assertContains(t, code, `reservations, total, err`)
 	assertContains(t, code, `"total":`)
 }
@@ -850,6 +850,100 @@ func assertContains(t *testing.T, code, substr string) {
 	if !strings.Contains(code, substr) {
 		t.Errorf("expected code to contain %q\n--- code ---\n%s", substr, code)
 	}
+}
+
+func TestGenerateEmptyErrStatus(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name:     "ActivateWorkflow",
+		FileName: "activate_workflow.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Org.FindByID", Inputs: map[string]string{"ID": "request.OrgID"}, Result: &parser.Result{Type: "Org", Var: "org"}},
+			{Type: parser.SeqEmpty, Target: "org", Message: "Insufficient credits", ErrStatus: 402},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	assertContains(t, code, "http.StatusPaymentRequired")
+	assertNotContains(t, code, "http.StatusNotFound")
+}
+
+func TestGenerateExistsErrStatus(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name:     "Register",
+		FileName: "register.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "User.FindByEmail", Inputs: map[string]string{"Email": "request.Email"}, Result: &parser.Result{Type: "*User", Var: "user"}},
+			{Type: parser.SeqExists, Target: "user", Message: "Already registered", ErrStatus: 422},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	assertContains(t, code, "http.StatusUnprocessableEntity")
+	assertNotContains(t, code, "http.StatusConflict")
+}
+
+func TestGenerateStateErrStatus(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name:     "ActivateWorkflow",
+		FileName: "activate_workflow.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Workflow.FindByID", Inputs: map[string]string{"ID": "request.WorkflowID"}, Result: &parser.Result{Type: "Workflow", Var: "workflow"}},
+			{Type: parser.SeqState, DiagramID: "workflow", Inputs: map[string]string{"Status": "workflow.Status"}, Transition: "Activate", Message: "Cannot transition", ErrStatus: 422},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	assertContains(t, code, "http.StatusUnprocessableEntity")
+	assertNotContains(t, code, "http.StatusConflict")
+}
+
+func TestGenerateAuthErrStatus(t *testing.T) {
+	sf := parser.ServiceFunc{
+		Name:     "Execute",
+		FileName: "execute.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqAuth, Action: "Execute", Resource: "workflow", Inputs: map[string]string{"UserID": "currentUser.ID"}, Message: "Token expired", ErrStatus: 401},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	assertContains(t, code, "http.StatusUnauthorized")
+	assertNotContains(t, code, "http.StatusForbidden")
+}
+
+func TestGenerateArgsOrderMatchesSqlc(t *testing.T) {
+	// sqlc: UPDATE gigs SET status = $1 WHERE id = $2
+	// → Params: ["Status", "ID"] (SQL 순서)
+	// SSaC: @put Gig.UpdateStatus({ID: request.GigID, Status: "published"})
+	// 알파벳순이면: gigModel.UpdateStatus(gigID, "published") — ID < Status (잘못됨)
+	// SQL 순서:    gigModel.UpdateStatus("published", gigID) — $1=status, $2=id (올바름)
+	st := &validator.SymbolTable{
+		Models: map[string]validator.ModelSymbol{
+			"Gig": {Methods: map[string]validator.MethodInfo{
+				"UpdateStatus": {Cardinality: "exec", Params: []string{"Status", "ID"}},
+			}},
+		},
+		Operations: map[string]validator.OperationSymbol{},
+		DDLTables:  map[string]validator.DDLTable{},
+	}
+	sf := parser.ServiceFunc{
+		Name: "PublishGig", FileName: "publish_gig.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqPut, Model: "Gig.UpdateStatus", Inputs: map[string]string{"ID": "request.GigID", "Status": `"published"`}},
+		},
+	}
+	code := mustGenerate(t, sf, st)
+	// SQL 순서: $1=status, $2=id → ("published", gigID)
+	assertContains(t, code, `gigModel.UpdateStatus("published", gigID)`)
+}
+
+func TestGenerateArgsOrderFallbackAlpha(t *testing.T) {
+	// 심볼 테이블 없으면 알파벳순 fallback
+	sf := parser.ServiceFunc{
+		Name: "PublishGig", FileName: "publish_gig.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqPut, Model: "Gig.UpdateStatus", Inputs: map[string]string{"ID": "request.GigID", "Status": `"published"`}},
+		},
+	}
+	code := mustGenerate(t, sf, nil)
+	// 알파벳순: ID < Status → (gigID, "published")
+	assertContains(t, code, `gigModel.UpdateStatus(gigID, "published")`)
 }
 
 func assertNotContains(t *testing.T, code, substr string) {

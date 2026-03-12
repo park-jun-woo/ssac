@@ -1248,3 +1248,67 @@ func TestValidateSubscribeQueryRejected(t *testing.T) {
 	errs := Validate(funcs)
 	assertHasError(t, errs, "query는 HTTP 전용입니다")
 }
+
+// --- extractSqlcParams 테스트 ---
+
+func TestExtractSqlcParamsInsert(t *testing.T) {
+	sql := "INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING *;"
+	params := extractSqlcParams(sql)
+	want := []string{"Email", "PasswordHash", "Name"}
+	if len(params) != len(want) {
+		t.Fatalf("expected %d params, got %d: %v", len(want), len(params), params)
+	}
+	for i, w := range want {
+		if params[i] != w {
+			t.Errorf("param[%d]: got %q, want %q", i, params[i], w)
+		}
+	}
+}
+
+func TestExtractSqlcParamsWhere(t *testing.T) {
+	sql := "SELECT * FROM reservations WHERE room_id = $1 AND end_at > $2 AND start_at < $3 LIMIT 1;"
+	params := extractSqlcParams(sql)
+	want := []string{"RoomID", "EndAt", "StartAt"}
+	if len(params) != len(want) {
+		t.Fatalf("expected %d params, got %d: %v", len(want), len(params), params)
+	}
+	for i, w := range want {
+		if params[i] != w {
+			t.Errorf("param[%d]: got %q, want %q", i, params[i], w)
+		}
+	}
+}
+
+func TestExtractSqlcParamsUpdate(t *testing.T) {
+	sql := "UPDATE gigs SET status = $1 WHERE id = $2;"
+	params := extractSqlcParams(sql)
+	want := []string{"Status", "ID"}
+	if len(params) != len(want) {
+		t.Fatalf("expected %d params, got %d: %v", len(want), len(params), params)
+	}
+	for i, w := range want {
+		if params[i] != w {
+			t.Errorf("param[%d]: got %q, want %q", i, params[i], w)
+		}
+	}
+}
+
+func TestExtractSqlcParamsNoParams(t *testing.T) {
+	sql := "SELECT * FROM gigs ORDER BY created_at DESC;"
+	params := extractSqlcParams(sql)
+	if len(params) != 0 {
+		t.Errorf("expected no params, got %v", params)
+	}
+}
+
+func TestExtractSqlcParamsSingleWhere(t *testing.T) {
+	sql := "SELECT * FROM users WHERE id = $1;"
+	params := extractSqlcParams(sql)
+	want := []string{"ID"}
+	if len(params) != len(want) {
+		t.Fatalf("expected %d params, got %d: %v", len(want), len(params), params)
+	}
+	if params[0] != want[0] {
+		t.Errorf("param[0]: got %q, want %q", params[0], want[0])
+	}
+}

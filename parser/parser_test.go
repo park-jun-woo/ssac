@@ -879,6 +879,72 @@ func parseTestFile(t *testing.T, src string) []ServiceFunc {
 	return sfs
 }
 
+func TestParseEmptyErrStatus(t *testing.T) {
+	src := `package service
+
+// @empty orgWithCredits "Insufficient credits" 402
+func ActivateWorkflow() {}
+`
+	sfs := parseTestFile(t, src)
+	seq := sfs[0].Sequences[0]
+	assertEqual(t, "Type", seq.Type, SeqEmpty)
+	assertEqual(t, "Target", seq.Target, "orgWithCredits")
+	assertEqual(t, "Message", seq.Message, "Insufficient credits")
+	if seq.ErrStatus != 402 {
+		t.Errorf("expected ErrStatus 402, got %d", seq.ErrStatus)
+	}
+}
+
+func TestParseExistsErrStatus(t *testing.T) {
+	src := `package service
+
+// @exists user "Already registered" 422
+func Register() {}
+`
+	sfs := parseTestFile(t, src)
+	seq := sfs[0].Sequences[0]
+	assertEqual(t, "Type", seq.Type, SeqExists)
+	assertEqual(t, "Target", seq.Target, "user")
+	assertEqual(t, "Message", seq.Message, "Already registered")
+	if seq.ErrStatus != 422 {
+		t.Errorf("expected ErrStatus 422, got %d", seq.ErrStatus)
+	}
+}
+
+func TestParseStateErrStatus(t *testing.T) {
+	src := `package service
+
+// @state workflow {status: workflow.Status} "ActivateWorkflow" "Cannot transition" 422
+func ActivateWorkflow() {}
+`
+	sfs := parseTestFile(t, src)
+	seq := sfs[0].Sequences[0]
+	assertEqual(t, "Type", seq.Type, SeqState)
+	assertEqual(t, "DiagramID", seq.DiagramID, "workflow")
+	assertEqual(t, "Transition", seq.Transition, "ActivateWorkflow")
+	assertEqual(t, "Message", seq.Message, "Cannot transition")
+	if seq.ErrStatus != 422 {
+		t.Errorf("expected ErrStatus 422, got %d", seq.ErrStatus)
+	}
+}
+
+func TestParseAuthErrStatus(t *testing.T) {
+	src := `package service
+
+// @auth "ActivateWorkflow" "workflow" {UserID: currentUser.ID, ResourceID: workflow.ID} "Forbidden" 401
+func ActivateWorkflow() {}
+`
+	sfs := parseTestFile(t, src)
+	seq := sfs[0].Sequences[0]
+	assertEqual(t, "Type", seq.Type, SeqAuth)
+	assertEqual(t, "Action", seq.Action, "ActivateWorkflow")
+	assertEqual(t, "Resource", seq.Resource, "workflow")
+	assertEqual(t, "Message", seq.Message, "Forbidden")
+	if seq.ErrStatus != 401 {
+		t.Errorf("expected ErrStatus 401, got %d", seq.ErrStatus)
+	}
+}
+
 func assertEqual(t *testing.T, name, got, want string) {
 	t.Helper()
 	if got != want {

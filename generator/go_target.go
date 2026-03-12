@@ -362,8 +362,12 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 	// Args/Inputs → code
 	switch seq.Type {
 	case parser.SeqGet, parser.SeqPost, parser.SeqPut, parser.SeqDelete:
-		// CRUD: Inputs value만 positional로 변환
-		d.ArgsCode = buildArgsCodeFromInputs(seq.Inputs)
+		// CRUD: Inputs value만 positional로 변환 (심볼 테이블 파라미터 순서 참조)
+		var paramOrder []string
+		if st != nil {
+			paramOrder = lookupParamOrder(seq.Model, st)
+		}
+		d.ArgsCode = buildArgsCodeFromInputs(seq.Inputs, paramOrder)
 	default:
 		d.ArgsCode = buildArgsCode(seq.Args)
 	}
@@ -387,6 +391,34 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 	// Auth
 	d.Action = seq.Action
 	d.Resource = seq.Resource
+
+	// ErrStatus (empty, exists, state, auth)
+	switch seq.Type {
+	case parser.SeqEmpty:
+		if seq.ErrStatus != 0 {
+			d.ErrStatus = httpStatusConst(seq.ErrStatus)
+		} else {
+			d.ErrStatus = "http.StatusNotFound"
+		}
+	case parser.SeqExists:
+		if seq.ErrStatus != 0 {
+			d.ErrStatus = httpStatusConst(seq.ErrStatus)
+		} else {
+			d.ErrStatus = "http.StatusConflict"
+		}
+	case parser.SeqState:
+		if seq.ErrStatus != 0 {
+			d.ErrStatus = httpStatusConst(seq.ErrStatus)
+		} else {
+			d.ErrStatus = "http.StatusConflict"
+		}
+	case parser.SeqAuth:
+		if seq.ErrStatus != 0 {
+			d.ErrStatus = httpStatusConst(seq.ErrStatus)
+		} else {
+			d.ErrStatus = "http.StatusForbidden"
+		}
+	}
 
 	// Inputs → InputFields (for state, auth, call)
 	if seq.Type == parser.SeqState || seq.Type == parser.SeqAuth || seq.Type == parser.SeqCall {
@@ -550,21 +582,68 @@ func inputValueToCode(val string) string {
 }
 
 // buildArgsCodeFromInputs는 Inputs map의 value만 추출하여 positional 함수 인자로 변환한다.
-func buildArgsCodeFromInputs(inputs map[string]string) string {
+// paramOrder가 있으면 그 순서로 배치하고, 없으면 알파벳순 fallback.
+func buildArgsCodeFromInputs(inputs map[string]string, paramOrder []string) string {
 	if len(inputs) == 0 {
 		return ""
 	}
-	keys := make([]string, 0, len(inputs))
-	for k := range inputs {
-		keys = append(keys, k)
+
+	var keys []string
+	if len(paramOrder) > 0 {
+		used := make(map[string]bool)
+		for _, p := range paramOrder {
+			if _, ok := inputs[p]; ok {
+				keys = append(keys, p)
+				used[p] = true
+			}
+		}
+		// paramOrder에 없는 키 (query 등) → 마지막에 추가
+		var extra []string
+		for k := range inputs {
+			if !used[k] {
+				extra = append(extra, k)
+			}
+		}
+		sort.Strings(extra)
+		keys = append(keys, extra...)
+	} else {
+		// fallback: 알파벳순, query는 마지막
+		var queryKey string
+		for k := range inputs {
+			if inputs[k] == "query" {
+				queryKey = k
+			} else {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
+		if queryKey != "" {
+			keys = append(keys, queryKey)
+		}
 	}
-	sort.Strings(keys)
 
 	var parts []string
 	for _, k := range keys {
 		parts = append(parts, inputValueToCode(inputs[k]))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// lookupParamOrder는 심볼 테이블에서 모델 메서드의 파라미터 순서를 조회한다.
+func lookupParamOrder(model string, st *validator.SymbolTable) []string {
+	parts := strings.SplitN(model, ".", 2)
+	if len(parts) < 2 {
+		return nil
+	}
+	ms, ok := st.Models[parts[0]]
+	if !ok {
+		return nil
+	}
+	mi, ok := ms.Methods[parts[1]]
+	if !ok {
+		return nil
+	}
+	return mi.Params
 }
 
 // buildPublishPayload는 publish의 Inputs를 map[string]any 리터럴 필드로 변환한다.
@@ -1042,6 +1121,8 @@ func httpStatusConst(code int) string {
 		return "http.StatusNotFound"
 	case 409:
 		return "http.StatusConflict"
+	case 422:
+		return "http.StatusUnprocessableEntity"
 	case 429:
 		return "http.StatusTooManyRequests"
 	case 500:
@@ -1158,11 +1239,27 @@ func deriveInterfaces(usages []modelUsage, st *validator.SymbolTable) []derivedI
 
 			dm := derivedMethod{Name: methodName}
 
-			inputKeys := make([]string, 0, len(usage.Inputs))
-			for k := range usage.Inputs {
-				inputKeys = append(inputKeys, k)
+			var inputKeys []string
+			if len(mi.Params) > 0 {
+				// sqlc/interface 파라미터 순서대로
+				used := make(map[string]bool)
+				for _, p := range mi.Params {
+					if _, ok := usage.Inputs[p]; ok {
+						inputKeys = append(inputKeys, p)
+						used[p] = true
+					}
+				}
+				for k := range usage.Inputs {
+					if !used[k] {
+						inputKeys = append(inputKeys, k)
+					}
+				}
+			} else {
+				for k := range usage.Inputs {
+					inputKeys = append(inputKeys, k)
+				}
+				sort.Strings(inputKeys)
 			}
-			sort.Strings(inputKeys)
 
 			for _, k := range inputKeys {
 				val := usage.Inputs[k]

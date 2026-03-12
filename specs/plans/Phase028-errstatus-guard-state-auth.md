@@ -1,3 +1,5 @@
+✅ 완료
+
 # Phase028: ErrStatus를 @empty, @exists, @state, @auth에 확장
 
 ## 목표

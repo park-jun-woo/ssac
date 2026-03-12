@@ -8,8 +8,12 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/ettle/strcase"
 	ssacparser "github.com/geul-org/ssac/parser"
 	"gopkg.in/yaml.v3"
 )
@@ -165,20 +169,45 @@ func (st *SymbolTable) loadSqlcQueries(dir string) error {
 		}
 
 		scanner := bufio.NewScanner(f)
+		var currentMethod string
+		var currentCardinality string
+		var currentSQL strings.Builder
+
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
 			// -- name: FindByID :one  또는  -- name: CourseFindByID :one
 			if strings.HasPrefix(line, "-- name:") {
+				// 이전 메서드의 SQL 처리
+				if currentMethod != "" {
+					params := extractSqlcParams(currentSQL.String())
+					ms.Methods[currentMethod] = MethodInfo{
+						Cardinality: currentCardinality,
+						Params:      params,
+					}
+				}
+				// 새 메서드 시작
 				parts := strings.Fields(line)
 				if len(parts) >= 4 {
-					methodName := stripModelPrefix(parts[2], modelName)
-					ms.Methods[methodName] = MethodInfo{
-						Cardinality: strings.TrimPrefix(parts[3], ":"),
-					}
+					currentMethod = stripModelPrefix(parts[2], modelName)
+					currentCardinality = strings.TrimPrefix(parts[3], ":")
 				} else if len(parts) >= 3 {
-					methodName := stripModelPrefix(parts[2], modelName)
-					ms.Methods[methodName] = MethodInfo{}
+					currentMethod = stripModelPrefix(parts[2], modelName)
+					currentCardinality = ""
+				} else {
+					currentMethod = ""
+					currentCardinality = ""
 				}
+				currentSQL.Reset()
+			} else if currentMethod != "" {
+				currentSQL.WriteString(line + " ")
+			}
+		}
+		// 마지막 메서드 처리
+		if currentMethod != "" {
+			params := extractSqlcParams(currentSQL.String())
+			ms.Methods[currentMethod] = MethodInfo{
+				Cardinality: currentCardinality,
+				Params:      params,
 			}
 		}
 		f.Close()
@@ -188,6 +217,75 @@ func (st *SymbolTable) loadSqlcQueries(dir string) error {
 		}
 	}
 	return nil
+}
+
+// extractSqlcParams는 SQL 본문에서 $N ↔ 컬럼명 매핑을 추출하여 $1, $2, ... 순서의 PascalCase 파라미터명을 반환한다.
+func extractSqlcParams(sql string) []string {
+	if !strings.Contains(sql, "$") {
+		return nil
+	}
+
+	upper := strings.ToUpper(sql)
+	if strings.Contains(upper, "INSERT") {
+		if params := extractInsertParams(sql); len(params) > 0 {
+			return params
+		}
+	}
+	return extractWhereSetParams(sql)
+}
+
+// extractInsertParams는 INSERT INTO table (col1, col2) VALUES ($1, $2) 패턴에서 컬럼 순서를 추출한다.
+func extractInsertParams(sql string) []string {
+	// 첫 번째 괄호 쌍 = 컬럼 목록
+	parenStart := strings.IndexByte(sql, '(')
+	if parenStart < 0 {
+		return nil
+	}
+	parenEnd := strings.IndexByte(sql[parenStart:], ')')
+	if parenEnd < 0 {
+		return nil
+	}
+	colStr := sql[parenStart+1 : parenStart+parenEnd]
+	cols := strings.Split(colStr, ",")
+
+	var params []string
+	for _, col := range cols {
+		col = strings.TrimSpace(col)
+		if col != "" {
+			params = append(params, strcase.ToGoPascal(col))
+		}
+	}
+	return params
+}
+
+var sqlParamRe = regexp.MustCompile(`(\w+)\s*[=<>!]+\s*\$(\d+)`)
+
+// extractWhereSetParams는 WHERE/SET 절에서 col = $N, col > $N 패턴을 추출하여 $N 순서대로 반환한다.
+func extractWhereSetParams(sql string) []string {
+	matches := sqlParamRe.FindAllStringSubmatch(sql, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	type paramEntry struct {
+		pos  int
+		name string
+	}
+	var entries []paramEntry
+	for _, m := range matches {
+		pos, err := strconv.Atoi(m[2])
+		if err != nil {
+			continue
+		}
+		entries = append(entries, paramEntry{pos: pos, name: m[1]})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].pos < entries[j].pos })
+
+	var params []string
+	for _, e := range entries {
+		params = append(params, strcase.ToGoPascal(e.name))
+	}
+	return params
 }
 
 // stripModelPrefix는 쿼리 이름에서 모델명 접두사를 제거한다.

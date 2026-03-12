@@ -71,7 +71,7 @@ type Sequence struct {
 
 	// 공통
 	Message      string // 에러 메시지
-	ErrStatus    int    // @call 에러 HTTP 상태 코드 (0이면 기본값 500)
+	ErrStatus    int    // 에러 HTTP 상태 코드 (0이면 타입별 기본값: @call→500, @empty→404, @exists→409, @state→409, @auth→403)
 	SuppressWarn bool   // @type! — WARNING 억제
 }
 

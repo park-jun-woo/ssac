@@ -41,28 +41,28 @@ var goTemplates = template.Must(template.New("").Parse(`
 
 {{- define "empty" -}}
 	if {{.Target}} {{.ZeroCheck}} {
-		c.JSON(http.StatusNotFound, gin.H{"error": "{{.Message}}"})
+		c.JSON({{.ErrStatus}}, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
 
 {{- define "exists" -}}
 	if {{.Target}} {{.ExistsCheck}} {
-		c.JSON(http.StatusConflict, gin.H{"error": "{{.Message}}"})
+		c.JSON({{.ErrStatus}}, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}
 
 {{- define "state" -}}
 	if err := {{.DiagramID}}state.CanTransition({{.DiagramID}}state.Input{ {{.InputFields}} }, "{{.Transition}}"); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		c.JSON({{.ErrStatus}}, gin.H{"error": err.Error()})
 		return
 	}
 {{end}}
 
 {{- define "auth" -}}
 	if _, err {{if .FirstErr}}:={{else}}={{end}} authz.Check(authz.CheckRequest{Action: "{{.Action}}", Resource: "{{.Resource}}", {{.InputFields}} }); err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "{{.Message}}"})
+		c.JSON({{.ErrStatus}}, gin.H{"error": "{{.Message}}"})
 		return
 	}
 {{end}}

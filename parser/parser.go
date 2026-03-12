@@ -286,12 +286,18 @@ func parseCRUD(seqType, rest string, hasResult bool) (*Sequence, error) {
 // target "message"
 func parseGuard(seqType, rest string) *Sequence {
 	rest = strings.TrimSpace(rest)
-	target, msg := splitTargetMessage(rest)
-	return &Sequence{
+	target, msg, remainder := splitTargetMessage(rest)
+	seq := &Sequence{
 		Type:    seqType,
 		Target:  target,
 		Message: msg,
 	}
+	if remainder != "" {
+		if code, err := strconv.Atoi(remainder); err == nil && code >= 100 && code <= 599 {
+			seq.ErrStatus = code
+		}
+	}
+	return seq
 }
 
 // parseState는 @state를 파싱한다.
@@ -313,16 +319,22 @@ func parseState(rest string) (*Sequence, error) {
 		return nil, err
 	}
 
-	// "transition" "message"
-	transition, msg := parseTwoQuoted(rest)
+	// "transition" "message" [STATUS]
+	transition, msg, remainder := parseTwoQuoted(rest)
 
-	return &Sequence{
+	seq := &Sequence{
 		Type:       SeqState,
 		DiagramID:  diagramID,
 		Inputs:     inputs,
 		Transition: transition,
 		Message:    msg,
-	}, nil
+	}
+	if remainder != "" {
+		if code, err := strconv.Atoi(remainder); err == nil && code >= 100 && code <= 599 {
+			seq.ErrStatus = code
+		}
+	}
+	return seq, nil
 }
 
 // parseAuth는 @auth를 파싱한다.
@@ -344,16 +356,23 @@ func parseAuth(rest string) (*Sequence, error) {
 		return nil, err
 	}
 
-	// "message"
-	msg, _ := extractQuoted(strings.TrimSpace(rest))
+	// "message" [STATUS]
+	msg, remainder := extractQuoted(strings.TrimSpace(rest))
 
-	return &Sequence{
+	seq := &Sequence{
 		Type:     SeqAuth,
 		Action:   action,
 		Resource: resource,
 		Inputs:   inputs,
 		Message:  msg,
-	}, nil
+	}
+	remainder = strings.TrimSpace(remainder)
+	if remainder != "" {
+		if code, err := strconv.Atoi(remainder); err == nil && code >= 100 && code <= 599 {
+			seq.ErrStatus = code
+		}
+	}
+	return seq, nil
 }
 
 // parseCall은 @call을 파싱한다.
@@ -601,22 +620,22 @@ func extractQuoted(s string) (string, string) {
 }
 
 // parseTwoQuoted는 "first" "second"를 파싱한다.
-func parseTwoQuoted(s string) (string, string) {
+func parseTwoQuoted(s string) (string, string, string) {
 	s = strings.TrimSpace(s)
 	first, rest := extractQuoted(s)
-	second, _ := extractQuoted(rest)
-	return first, second
+	second, remainder := extractQuoted(rest)
+	return first, second, strings.TrimSpace(remainder)
 }
 
 // splitTargetMessage는 "target "message""를 분리한다.
-func splitTargetMessage(s string) (string, string) {
+func splitTargetMessage(s string) (string, string, string) {
 	quoteIdx := strings.IndexByte(s, '"')
 	if quoteIdx < 0 {
-		return strings.TrimSpace(s), ""
+		return strings.TrimSpace(s), "", ""
 	}
 	target := strings.TrimSpace(s[:quoteIdx])
-	msg, _ := extractQuoted(s[quoteIdx:])
-	return target, msg
+	msg, remainder := extractQuoted(s[quoteIdx:])
+	return target, msg, strings.TrimSpace(remainder)
 }
 
 // splitPackagePrefix는 "session.Session.Get" → ("session", "Session.Get")로 분리한다.
