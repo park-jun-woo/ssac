@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/geul-org/ssac/parser"
@@ -766,9 +767,13 @@ func TestGenerateAuthClaims(t *testing.T) {
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	// currentUser 참조 시 Claims 자동 추가
+	// 템플릿 고정 UserID, Role — inputs에 명시해도 중복 없음
 	assertContains(t, code, `UserID: currentUser.ID`)
 	assertContains(t, code, `Role: currentUser.Role`)
+	// UserID가 1번만 나오는지 확인 (중복 방지)
+	if strings.Count(code, "UserID:") != 1 {
+		t.Errorf("expected UserID: to appear exactly once, got %d\n--- code ---\n%s", strings.Count(code, "UserID:"), code)
+	}
 }
 
 func TestGenerateAuthAlwaysIncludesUserIDRole(t *testing.T) {

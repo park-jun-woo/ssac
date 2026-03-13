@@ -161,6 +161,16 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 	if seq.Type == parser.SeqState || seq.Type == parser.SeqAuth || seq.Type == parser.SeqCall {
 		if len(seq.Inputs) > 0 {
 			inputs := seq.Inputs
+			// @auth: UserID, Role은 템플릿에서 고정 출력 — 중복 방지
+			if seq.Type == parser.SeqAuth {
+				filtered := make(map[string]string)
+				for k, v := range inputs {
+					if k != "UserID" && k != "Role" {
+						filtered[k] = v
+					}
+				}
+				inputs = filtered
+			}
 			d.InputFields = buildInputFieldsFromMap(inputs)
 		}
 	}
