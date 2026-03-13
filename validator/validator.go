@@ -23,7 +23,7 @@ func ValidateWithSymbols(funcs []parser.ServiceFunc, st *SymbolTable) []Validati
 	for _, sf := range funcs {
 		errs = append(errs, validateModel(sf, st)...)
 		errs = append(errs, validateRequest(sf, st)...)
-		errs = append(errs, validateResponse(sf, st)...)
+
 		errs = append(errs, validateQueryUsage(sf, st)...)
 		errs = append(errs, validatePaginationType(sf, st)...)
 		errs = append(errs, validateCallInputTypes(sf, st)...)
@@ -469,88 +469,6 @@ func validateRequest(sf parser.ServiceFunc, st *SymbolTable) []ValidationError {
 	}
 
 	return errs
-}
-
-// validateResponse는 @response Fields가 OpenAPI response와 일치하는지 검증한다.
-func validateResponse(sf parser.ServiceFunc, st *SymbolTable) []ValidationError {
-	var errs []ValidationError
-	op, ok := st.Operations[sf.Name]
-	if !ok {
-		return nil
-	}
-
-	var responseFields map[string]bool
-	var responseSeqIdx int
-	for i, seq := range sf.Sequences {
-		if seq.Type != parser.SeqResponse {
-			continue
-		}
-		responseSeqIdx = i
-		ctx := errCtx{sf.FileName, sf.Name, i}
-
-		// 간단쓰기: @response varName → Wrapper 고정 필드로 검증
-		if seq.Target != "" {
-			wrapperFields := resolveWrapperFields(sf.Sequences, seq.Target)
-			if wrapperFields != nil {
-				responseFields = make(map[string]bool)
-				for _, f := range wrapperFields {
-					responseFields[f] = true
-				}
-				for _, f := range wrapperFields {
-					if !op.ResponseFields[f] {
-						errs = append(errs, ctx.err("@response", fmt.Sprintf("OpenAPI response에 %q 필드가 없습니다 (%s 타입 필수 필드)", f, seq.Target)))
-					}
-				}
-			}
-			continue
-		}
-
-		// 풀어쓰기: 기존 필드 매핑
-		responseFields = make(map[string]bool)
-		for field := range seq.Fields {
-			responseFields[field] = true
-			if !op.ResponseFields[field] {
-				errs = append(errs, ctx.err("@response", fmt.Sprintf("OpenAPI response에 %q 필드가 없습니다", field)))
-			}
-		}
-	}
-
-	// 역방향: OpenAPI → SSaC @response
-	if responseFields != nil && len(op.ResponseFields) > 0 {
-		ctx := errCtx{sf.FileName, sf.Name, responseSeqIdx}
-		for field := range op.ResponseFields {
-			if field == "total" && op.XPagination != nil {
-				continue
-			}
-			if !responseFields[field] {
-				errs = append(errs, ValidationError{
-					FileName: ctx.fileName,
-					FuncName: ctx.funcName,
-					SeqIndex: ctx.seqIndex,
-					Tag:      "@response",
-					Message:  fmt.Sprintf("OpenAPI response에 %q 필드가 있지만 SSaC @response에 없습니다\n  → @response에 %s 필드를 추가하고, %s를 조회하는 시퀀스도 함께 작성하세요", field, field, field),
-				})
-			}
-		}
-	}
-
-	return errs
-}
-
-// wrapperFieldsMap은 제네릭 래퍼 타입의 고정 JSON 필드 목록이다.
-var wrapperFieldsMap = map[string][]string{
-	"Page":   {"items", "total"},
-	"Cursor": {"items", "next_cursor", "has_next"},
-}
-
-// resolveWrapperFields는 @response 간단쓰기 대상 변수의 Wrapper 타입에서 고정 필드를 반환한다.
-func resolveWrapperFields(seqs []parser.Sequence, targetVar string) []string {
-	for _, seq := range seqs {
-		if seq.Result != nil && seq.Result.Var == targetVar && seq.Result.Wrapper != "" {
-			return wrapperFieldsMap[seq.Result.Wrapper]
-		}
-	}
-	return nil
 }
 
 // validateQueryUsage는 SSaC의 query 사용과 OpenAPI x-extensions 간 교차 검증을 수행한다.

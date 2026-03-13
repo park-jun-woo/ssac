@@ -283,9 +283,8 @@ func TestGenerateWithPathParam(t *testing.T) {
 		DDLTables: map[string]validator.DDLTable{},
 		Operations: map[string]validator.OperationSymbol{
 			"GetCourse": {
-				PathParams:     []validator.PathParam{{Name: "CourseID", GoType: "int64"}},
-				RequestFields:  map[string]bool{"CourseID": true},
-				ResponseFields: map[string]bool{"course": true},
+				PathParams:    []validator.PathParam{{Name: "CourseID", GoType: "int64"}},
+				RequestFields: map[string]bool{"CourseID": true},
 			},
 		},
 	}

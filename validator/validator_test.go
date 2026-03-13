@@ -332,7 +332,7 @@ func TestValidateRequestFieldNotInOpenAPI(t *testing.T) {
 		Operations: map[string]OperationSymbol{
 			"GetCourse": {
 				RequestFields:  map[string]bool{"CourseID": true},
-				ResponseFields: map[string]bool{"course": true},
+
 			},
 		},
 	}
@@ -355,7 +355,7 @@ func TestValidateReverseRequestMissing(t *testing.T) {
 		Operations: map[string]OperationSymbol{
 			"GetCourse": {
 				RequestFields:  map[string]bool{"CourseID": true, "Description": true},
-				ResponseFields: map[string]bool{"course": true},
+
 			},
 		},
 	}
@@ -378,7 +378,7 @@ func TestValidateReverseRequestPathParamSkip(t *testing.T) {
 		Operations: map[string]OperationSymbol{
 			"GetCourse": {
 				RequestFields:  map[string]bool{"CourseID": true},
-				ResponseFields: map[string]bool{"course": true},
+
 				PathParams:     []PathParam{{Name: "CourseID", GoType: "int64"}},
 			},
 		},
@@ -394,84 +394,6 @@ func TestValidateReverseRequestPathParamSkip(t *testing.T) {
 	for _, e := range errs {
 		if e.IsWarning() && contains(e.Message, "CourseID") {
 			t.Errorf("path param should be skipped in reverse check: %s", e.Message)
-		}
-	}
-}
-
-// --- 외부 검증: response ---
-
-func TestValidateResponseFieldNotInOpenAPI(t *testing.T) {
-	st := &SymbolTable{
-		Models: map[string]ModelSymbol{
-			"Course": {Methods: map[string]MethodInfo{"FindByID": {Cardinality: "one"}}},
-		},
-		Operations: map[string]OperationSymbol{
-			"GetCourse": {
-				RequestFields:  map[string]bool{"CourseID": true},
-				ResponseFields: map[string]bool{"course": true},
-				PathParams:     []PathParam{{Name: "CourseID", GoType: "int64"}},
-			},
-		},
-	}
-	funcs := []parser.ServiceFunc{{
-		Name: "GetCourse", FileName: "get_course.go",
-		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"CourseID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
-			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course", "extra": "course.Name"}},
-		},
-	}}
-	errs := ValidateWithSymbols(funcs, st)
-	assertHasError(t, errs, `OpenAPI response에 "extra" 필드가 없습니다`)
-}
-
-func TestValidateReverseResponseMissing(t *testing.T) {
-	st := &SymbolTable{
-		Models: map[string]ModelSymbol{
-			"Course": {Methods: map[string]MethodInfo{"FindByID": {Cardinality: "one"}}},
-		},
-		Operations: map[string]OperationSymbol{
-			"GetCourse": {
-				RequestFields:  map[string]bool{"CourseID": true},
-				ResponseFields: map[string]bool{"course": true, "instructor": true},
-				PathParams:     []PathParam{{Name: "CourseID", GoType: "int64"}},
-			},
-		},
-	}
-	funcs := []parser.ServiceFunc{{
-		Name: "GetCourse", FileName: "get_course.go",
-		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"CourseID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
-			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
-		},
-	}}
-	errs := ValidateWithSymbols(funcs, st)
-	assertHasError(t, errs, `OpenAPI response에 "instructor" 필드가 있지만 SSaC @response에 없습니다`)
-}
-
-func TestValidateReverseResponsePaginationTotal(t *testing.T) {
-	st := &SymbolTable{
-		Models: map[string]ModelSymbol{
-			"Item": {Methods: map[string]MethodInfo{"List": {Cardinality: "many"}}},
-		},
-		Operations: map[string]OperationSymbol{
-			"ListItems": {
-				RequestFields:  map[string]bool{},
-				ResponseFields: map[string]bool{"items": true, "total": true},
-				XPagination:    &XPagination{Style: "offset", DefaultLimit: 20, MaxLimit: 100},
-			},
-		},
-	}
-	funcs := []parser.ServiceFunc{{
-		Name: "ListItems", FileName: "list_items.go",
-		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Item.List", Inputs: map[string]string{"Dummy": "request.dummy"}, Result: &parser.Result{Type: "[]Item", Var: "items"}},
-			{Type: parser.SeqResponse, Fields: map[string]string{"items": "items"}},
-		},
-	}}
-	errs := ValidateWithSymbols(funcs, st)
-	for _, e := range errs {
-		if contains(e.Message, "total") {
-			t.Errorf("total should be skipped with x-pagination: %s", e.Message)
 		}
 	}
 }
@@ -879,50 +801,6 @@ func TestValidateNoPaginationWithWrapper(t *testing.T) {
 	}}
 	errs := ValidateWithSymbols(funcs, st)
 	assertHasError(t, errs, "x-pagination이 없지만")
-}
-
-func TestValidateResponseDirectPageFieldsMatch(t *testing.T) {
-	st := &SymbolTable{
-		Models:    map[string]ModelSymbol{"Gig": {Methods: map[string]MethodInfo{"List": {Cardinality: "many"}}}},
-		DDLTables: map[string]DDLTable{},
-		Operations: map[string]OperationSymbol{
-			"ListGigs": {
-				XPagination:    &XPagination{Style: "offset"},
-				ResponseFields: map[string]bool{"items": true, "total": true},
-			},
-		},
-	}
-	funcs := []parser.ServiceFunc{{
-		Name: "ListGigs", FileName: "list_gigs.go",
-		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Gig.List", Inputs: map[string]string{"Query": "query"}, Result: &parser.Result{Type: "Gig", Var: "gigPage", Wrapper: "Page"}},
-			{Type: parser.SeqResponse, Target: "gigPage"},
-		},
-	}}
-	errs := ValidateWithSymbols(funcs, st)
-	assertNoErrors(t, errs)
-}
-
-func TestValidateResponseDirectPageFieldsMissing(t *testing.T) {
-	st := &SymbolTable{
-		Models:    map[string]ModelSymbol{"Gig": {Methods: map[string]MethodInfo{"List": {Cardinality: "many"}}}},
-		DDLTables: map[string]DDLTable{},
-		Operations: map[string]OperationSymbol{
-			"ListGigs": {
-				XPagination:    &XPagination{Style: "offset"},
-				ResponseFields: map[string]bool{"data": true, "count": true},
-			},
-		},
-	}
-	funcs := []parser.ServiceFunc{{
-		Name: "ListGigs", FileName: "list_gigs.go",
-		Sequences: []parser.Sequence{
-			{Type: parser.SeqGet, Model: "Gig.List", Inputs: map[string]string{"Query": "query"}, Result: &parser.Result{Type: "Gig", Var: "gigPage", Wrapper: "Page"}},
-			{Type: parser.SeqResponse, Target: "gigPage"},
-		},
-	}}
-	errs := ValidateWithSymbols(funcs, st)
-	assertHasError(t, errs, `"items" 필드가 없습니다`)
 }
 
 // --- 내부 검증: @publish / @subscribe ---

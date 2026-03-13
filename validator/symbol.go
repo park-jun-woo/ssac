@@ -21,7 +21,7 @@ import (
 // SymbolTable은 외부 SSOT에서 수집한 심볼 정보다.
 type SymbolTable struct {
 	Models     map[string]ModelSymbol     // "User" → {Methods: {"FindByID": ...}}
-	Operations map[string]OperationSymbol // "Login" → {RequestFields, ResponseFields}
+	Operations map[string]OperationSymbol // "Login" → {RequestFields, PathParams, ...}
 	Funcs      map[string]bool            // "calculateRefund" → true
 	DDLTables  map[string]DDLTable        // "users" → {Columns: {"id": "int64", ...}}
 	DTOs map[string]bool // "Token" → true (DDL 테이블 없는 순수 DTO)
@@ -69,9 +69,8 @@ type Index struct {
 
 // OperationSymbol은 API 엔드포인트의 request/response 필드 목록이다.
 type OperationSymbol struct {
-	RequestFields  map[string]bool
-	ResponseFields map[string]bool
-	PathParams     []PathParam // path parameter (순서 보존)
+	RequestFields map[string]bool
+	PathParams    []PathParam // path parameter (순서 보존)
 	XPagination    *XPagination
 	XSort          *XSort
 	XFilter        *XFilter
@@ -340,9 +339,8 @@ func (st *SymbolTable) loadOpenAPI(path string) error {
 			}
 
 			opSym := OperationSymbol{
-				RequestFields:  make(map[string]bool),
-				ResponseFields: make(map[string]bool),
-				XPagination:    op.XPagination,
+				RequestFields: make(map[string]bool),
+				XPagination:   op.XPagination,
 				XSort:          op.XSort,
 				XFilter:        op.XFilter,
 				XInclude:       op.XInclude,
@@ -365,16 +363,6 @@ func (st *SymbolTable) loadOpenAPI(path string) error {
 					fields := collectSchemaFields(content.Schema, schemas)
 					for _, f := range fields {
 						opSym.RequestFields[f] = true
-					}
-				}
-			}
-
-			// response fields (200)
-			if resp, ok := op.Responses["200"]; ok {
-				if content, ok := resp.Content["application/json"]; ok {
-					fields := collectSchemaFields(content.Schema, schemas)
-					for _, f := range fields {
-						opSym.ResponseFields[f] = true
 					}
 				}
 			}
