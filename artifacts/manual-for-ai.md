@@ -272,6 +272,7 @@ Additional features when symbol table (external SSOT) is available:
 - **@publish codegen**: `@publish "topic" {payload}` → `queue.Publish(c.Request.Context(), "topic", map[string]any{...})` (HTTP) or `queue.Publish(ctx, ...)` (subscribe). Options: `queue.WithDelay()`, `queue.WithPriority()`. Import `"queue"` auto-added.
 - **@subscribe codegen**: `func (h *Handler) Name(ctx context.Context, message T) error`. Handler method. Errors → `return fmt.Errorf(...)`, success → `return nil`. No gin dependency. Message type is Go struct in same .ssac file.
 - **Subscribe validation**: param required, param name must be `message`, MessageType must exist as struct, `message.Field` must exist in struct. No `@response`, no `request` usage, no `query` usage.
+- **FK reference guard**: `@get` with input from previous result variable's field (FK pattern) → `@empty` guard required after it (ERROR). Slice/wrapper results skipped. `@get!` does NOT suppress (ERROR, not WARNING).
 - **@publish validation**: `query` reserved source cannot be used in @publish inputs (HTTP-only)
 
 Singularization rules (sqlc filename → model name): `ies`→`y`, `sses`→`ss`, `xes`→`x`, otherwise remove trailing `s`

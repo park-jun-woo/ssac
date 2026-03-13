@@ -57,6 +57,7 @@ ssac validate specs/dummy-study       # 외부 SSOT 교차 검증 (자동 감지
 | 외부 | Go 예약어 파라미터명 (DDL 컬럼이 `type`, `range` 등 → ERROR) |
 | 외부 | @call 입력 타입 검증 (DDL 역추적 타입 ≠ Request struct 필드 타입 → ERROR) |
 | 내부 | config.* 입력 거부 (validator ERROR — `os.Getenv()` 사용 안내) |
+| 내부 | FK 참조 `@get` 후 `@empty` 누락 (이전 result 변수 필드 참조 시 ERROR, `@get!`로 억제 불가) |
 
 ### gen
 
