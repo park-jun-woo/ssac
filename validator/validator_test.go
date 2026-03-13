@@ -1095,6 +1095,90 @@ func TestValidateSubscribeFieldOK(t *testing.T) {
 	}
 }
 
+// --- 내부 검증: FK 참조 @empty 가드 ---
+
+func TestValidateFKReferenceGetMissingEmpty(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "UpdateSchedule", FileName: "update_schedule.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Schedule.FindByID", Inputs: map[string]string{"ID": "request.ScheduleID"}, Result: &parser.Result{Type: "Schedule", Var: "schedule"}},
+			{Type: parser.SeqGet, Model: "Project.FindByID", Inputs: map[string]string{"ID": "schedule.ProjectID"}, Result: &parser.Result{Type: "Project", Var: "project"}},
+			// @empty project 누락 → ERROR
+			{Type: parser.SeqPut, Model: "Schedule.Update", Inputs: map[string]string{"ID": "request.ScheduleID", "Name": "request.Name"}},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "FK 참조 조회 후 @empty 가드가 필요합니다")
+}
+
+func TestValidateFKReferenceGetWithEmpty(t *testing.T) {
+	funcs := []parser.ServiceFunc{{
+		Name: "UpdateSchedule", FileName: "update_schedule.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Schedule.FindByID", Inputs: map[string]string{"ID": "request.ScheduleID"}, Result: &parser.Result{Type: "Schedule", Var: "schedule"}},
+			{Type: parser.SeqGet, Model: "Project.FindByID", Inputs: map[string]string{"ID": "schedule.ProjectID"}, Result: &parser.Result{Type: "Project", Var: "project"}},
+			{Type: parser.SeqEmpty, Target: "project", Message: "project not found"},
+			{Type: parser.SeqPut, Model: "Schedule.Update", Inputs: map[string]string{"ID": "request.ScheduleID"}},
+		},
+	}}
+	errs := Validate(funcs)
+	for _, e := range errs {
+		if contains(e.Message, "FK 참조 조회") {
+			t.Errorf("unexpected FK reference error: %s", e.Message)
+		}
+	}
+}
+
+func TestValidateFKReferenceGetNotSuppressedByBang(t *testing.T) {
+	// @get!는 WARNING 억제용 — FK 참조 ERROR는 억제 불가
+	funcs := []parser.ServiceFunc{{
+		Name: "UpdateSchedule", FileName: "update_schedule.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Schedule.FindByID", Inputs: map[string]string{"ID": "request.ScheduleID"}, Result: &parser.Result{Type: "Schedule", Var: "schedule"}},
+			{Type: parser.SeqGet, Model: "Project.FindByID", Inputs: map[string]string{"ID": "schedule.ProjectID"}, Result: &parser.Result{Type: "Project", Var: "project"}, SuppressWarn: true},
+		},
+	}}
+	errs := Validate(funcs)
+	assertHasError(t, errs, "FK 참조 조회 후 @empty 가드가 필요합니다")
+}
+
+func TestValidateFKReferenceGetSliceSkipped(t *testing.T) {
+	// 슬라이스 결과는 nil dereference 위험 없음 — 스킵
+	funcs := []parser.ServiceFunc{{
+		Name: "ListTasks", FileName: "list_tasks.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Project.FindByID", Inputs: map[string]string{"ID": "request.ProjectID"}, Result: &parser.Result{Type: "Project", Var: "project"}},
+			{Type: parser.SeqEmpty, Target: "project", Message: "not found"},
+			{Type: parser.SeqGet, Model: "Task.ListByProject", Inputs: map[string]string{"ProjectID": "project.ID"}, Result: &parser.Result{Type: "[]Task", Var: "tasks"}},
+			// tasks는 []Task → nil dereference 없음 → @empty 불필요
+			{Type: parser.SeqResponse, Fields: map[string]string{"tasks": "tasks"}},
+		},
+	}}
+	errs := Validate(funcs)
+	for _, e := range errs {
+		if contains(e.Message, "FK 참조 조회") {
+			t.Errorf("slice result should not require @empty: %s", e.Message)
+		}
+	}
+}
+
+func TestValidateRequestGetNotFKReference(t *testing.T) {
+	// request.* 소스는 FK 참조가 아님 — @empty 불필요
+	funcs := []parser.ServiceFunc{{
+		Name: "GetCourse", FileName: "get_course.go",
+		Sequences: []parser.Sequence{
+			{Type: parser.SeqGet, Model: "Course.FindByID", Inputs: map[string]string{"ID": "request.CourseID"}, Result: &parser.Result{Type: "Course", Var: "course"}},
+			{Type: parser.SeqResponse, Fields: map[string]string{"course": "course"}},
+		},
+	}}
+	errs := Validate(funcs)
+	for _, e := range errs {
+		if contains(e.Message, "FK 참조 조회") {
+			t.Errorf("request source should not trigger FK reference error: %s", e.Message)
+		}
+	}
+}
+
 // --- 외부 검증: Go 예약어 ---
 
 func TestValidateGoReservedWordInInputs(t *testing.T) {
