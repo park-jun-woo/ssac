@@ -528,7 +528,7 @@ func TestGenerateAuthCallStyle(t *testing.T) {
 	assertNotContains(t, code, `authz.Input{`)
 }
 
-func TestGenerateAuthNoCurrentUser(t *testing.T) {
+func TestGenerateAuthAlwaysHasCurrentUser(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "CheckAccess", FileName: "check_access.go",
 		Sequences: []parser.Sequence{
@@ -536,9 +536,10 @@ func TestGenerateAuthNoCurrentUser(t *testing.T) {
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	// @auth inputs에 currentUser 없으면 currentUser 추출 코드 없음
-	assertNotContains(t, code, `c.MustGet("currentUser")`)
-	assertNotContains(t, code, `Role:`)
+	// @auth는 항상 currentUser 추출 + UserID, Role 포함
+	assertContains(t, code, `c.MustGet("currentUser")`)
+	assertContains(t, code, `UserID: currentUser.ID`)
+	assertContains(t, code, `Role: currentUser.Role`)
 	assertContains(t, code, `authz.Check(authz.CheckRequest{`)
 }
 
@@ -770,7 +771,7 @@ func TestGenerateAuthClaims(t *testing.T) {
 	assertContains(t, code, `Role: currentUser.Role`)
 }
 
-func TestGenerateAuthNoClaimsWithoutCurrentUser(t *testing.T) {
+func TestGenerateAuthAlwaysIncludesUserIDRole(t *testing.T) {
 	sf := parser.ServiceFunc{
 		Name: "CheckAccess", FileName: "check_access.go",
 		Sequences: []parser.Sequence{
@@ -778,9 +779,9 @@ func TestGenerateAuthNoClaimsWithoutCurrentUser(t *testing.T) {
 		},
 	}
 	code := mustGenerate(t, sf, nil)
-	// currentUser 없으면 Claims 없음
-	assertNotContains(t, code, `Claims:`)
-	assertNotContains(t, code, `Role:`)
+	// @auth 템플릿에 항상 UserID, Role 포함
+	assertContains(t, code, `UserID: currentUser.ID`)
+	assertContains(t, code, `Role: currentUser.Role`)
 }
 
 func TestGenerateSubscribeAuthClaims(t *testing.T) {

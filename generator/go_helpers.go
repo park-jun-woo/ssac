@@ -161,16 +161,6 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 	if seq.Type == parser.SeqState || seq.Type == parser.SeqAuth || seq.Type == parser.SeqCall {
 		if len(seq.Inputs) > 0 {
 			inputs := seq.Inputs
-			// @auth + currentUser 참조 → Role, UserID 자동 추가
-			if seq.Type == parser.SeqAuth && hasCurrentUserRef(inputs) {
-				inputs = copyInputs(inputs)
-				if _, hasRole := inputs["Role"]; !hasRole {
-					inputs["Role"] = "currentUser.Role"
-				}
-				if _, hasUserID := inputs["UserID"]; !hasUserID {
-					inputs["UserID"] = "currentUser.ID"
-				}
-			}
 			d.InputFields = buildInputFieldsFromMap(inputs)
 		}
 	}
@@ -228,6 +218,10 @@ func buildTemplateData(seq parser.Sequence, errDeclared *bool, declaredVars map[
 
 func needsCurrentUser(seqs []parser.Sequence) bool {
 	for _, seq := range seqs {
+		// @auth는 항상 currentUser.ID, currentUser.Role을 사용
+		if seq.Type == parser.SeqAuth {
+			return true
+		}
 		for _, a := range seq.Args {
 			if a.Source == "currentUser" {
 				return true

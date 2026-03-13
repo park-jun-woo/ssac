@@ -57,25 +57,6 @@ func buildInputFieldsFromMap(inputs map[string]string) string {
 	return strings.Join(fields, ", ")
 }
 
-// hasCurrentUserRef는 inputs 값 중 currentUser. 참조가 있는지 확인한다.
-func hasCurrentUserRef(inputs map[string]string) bool {
-	for _, v := range inputs {
-		if strings.HasPrefix(v, "currentUser.") {
-			return true
-		}
-	}
-	return false
-}
-
-// copyInputs는 inputs map의 얕은 복사본을 만든다.
-func copyInputs(inputs map[string]string) map[string]string {
-	cp := make(map[string]string, len(inputs)+1)
-	for k, v := range inputs {
-		cp[k] = v
-	}
-	return cp
-}
-
 // inputValueToCode는 inputs 값에 argToCode와 동일한 예약 소스 변환을 적용한다.
 func inputValueToCode(val string) string {
 	if val == "query" {

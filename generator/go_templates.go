@@ -61,7 +61,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{end}}
 
 {{- define "auth" -}}
-	if _, err {{if .FirstErr}}:={{else}}={{end}} authz.Check(authz.CheckRequest{Action: "{{.Action}}", Resource: "{{.Resource}}", {{.InputFields}} }); err != nil {
+	if _, err {{if .FirstErr}}:={{else}}={{end}} authz.Check(authz.CheckRequest{Action: "{{.Action}}", Resource: "{{.Resource}}", UserID: currentUser.ID, Role: currentUser.Role, {{.InputFields}} }); err != nil {
 		c.JSON({{.ErrStatus}}, gin.H{"error": "{{.Message}}"})
 		return
 	}
@@ -154,7 +154,7 @@ var goTemplates = template.Must(template.New("").Parse(`
 {{end}}
 
 {{- define "sub_auth" -}}
-	if _, err {{if .FirstErr}}:={{else}}={{end}} authz.Check(authz.CheckRequest{Action: "{{.Action}}", Resource: "{{.Resource}}", {{.InputFields}} }); err != nil {
+	if _, err {{if .FirstErr}}:={{else}}={{end}} authz.Check(authz.CheckRequest{Action: "{{.Action}}", Resource: "{{.Resource}}", UserID: currentUser.ID, Role: currentUser.Role, {{.InputFields}} }); err != nil {
 		return fmt.Errorf("{{.Message}}: %w", err)
 	}
 {{end}}
