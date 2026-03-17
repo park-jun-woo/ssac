@@ -3,8 +3,8 @@ package generator
 import (
 	"testing"
 
-	"github.com/geul-org/ssac/parser"
-	"github.com/geul-org/ssac/validator"
+	"github.com/park-jun-woo/ssac/parser"
+	"github.com/park-jun-woo/ssac/validator"
 )
 
 func TestGenerateModelInterface(t *testing.T) {

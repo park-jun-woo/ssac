@@ -18,7 +18,7 @@ package service
 
 import (
     "net/http"
-    "github.com/geul-org/fullend/pkg/auth"
+    "github.com/park-jun-woo/fullend/pkg/auth"
 )
 
 // @sequence call
@@ -27,7 +27,7 @@ import (
 func Login(w http.ResponseWriter, r *http.Request) {}
 ```
 
-→ 생성 코드에 `import "github.com/geul-org/fullend/pkg/auth"` 포함.
+→ 생성 코드에 `import "github.com/park-jun-woo/fullend/pkg/auth"` 포함.
 
 **구현:**
 - `parser/types.go`: `ServiceFunc`에 `Imports []string` 필드 추가

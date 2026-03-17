@@ -51,7 +51,7 @@
 
 - `Result.Wrapper`가 `"Page"` 또는 `"Cursor"`이면:
   - model interface 반환 타입: `(*pagination.Page[Gig], error)` / `(*pagination.Cursor[Gig], error)`
-  - import `"github.com/geul-org/fullend/pkg/pagination"` 추가
+  - import `"github.com/park-jun-woo/fullend/pkg/pagination"` 추가
   - 기존 3-tuple(`result, total, err`) 대신 단일 반환(`gigPage, err`) — `HasTotal = false`
   - `[]T` + QueryOpts → 기존 3-tuple 유지 (하위 호환)
 - `@response 변수명` (간단쓰기):
@@ -74,7 +74,7 @@
 
 ## 의존성
 
-- `github.com/geul-org/fullend/pkg/pagination` — 런타임 의존 (생성 코드에서 import)
+- `github.com/park-jun-woo/fullend/pkg/pagination` — 런타임 의존 (생성 코드에서 import)
 - SSaC 자체에는 새 외부 의존성 없음
 
 ## 검증 방법

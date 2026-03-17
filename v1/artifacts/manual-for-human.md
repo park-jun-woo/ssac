@@ -215,7 +215,7 @@ package service
 
 import (
     "net/http"
-    "github.com/geul-org/fullend/pkg/auth"
+    "github.com/park-jun-woo/fullend/pkg/auth"
 )
 
 // @sequence call
@@ -546,7 +546,7 @@ package service
 
 import (
     "net/http"
-    "github.com/geul-org/fullend/pkg/auth"
+    "github.com/park-jun-woo/fullend/pkg/auth"
 )
 
 // @sequence get
@@ -583,7 +583,7 @@ import (
     "net/http"
 
     "github.com/gin-gonic/gin"
-    "github.com/geul-org/fullend/pkg/auth"
+    "github.com/park-jun-woo/fullend/pkg/auth"
 )
 
 func Login(c *gin.Context) {

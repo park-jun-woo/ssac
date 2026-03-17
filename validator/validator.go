@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/geul-org/ssac/parser"
+	"github.com/park-jun-woo/ssac/parser"
 )
 
 // Validate는 []ServiceFunc의 내부 정합성을 검증한다.

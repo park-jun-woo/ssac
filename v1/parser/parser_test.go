@@ -536,7 +536,7 @@ func TestParseFileImports(t *testing.T) {
 
 import (
 	"net/http"
-	"github.com/geul-org/fullend/pkg/auth"
+	"github.com/park-jun-woo/fullend/pkg/auth"
 )
 
 // @sequence call
@@ -564,7 +564,7 @@ func Login(w http.ResponseWriter, r *http.Request) {}
 	if len(sf.Imports) != 1 {
 		t.Fatalf("Imports 수: got %d, want 1, imports: %v", len(sf.Imports), sf.Imports)
 	}
-	assertStr(t, "Imports[0]", sf.Imports[0], "github.com/geul-org/fullend/pkg/auth")
+	assertStr(t, "Imports[0]", sf.Imports[0], "github.com/park-jun-woo/fullend/pkg/auth")
 }
 
 // --- 헬퍼 ---

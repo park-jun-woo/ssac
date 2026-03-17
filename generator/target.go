@@ -1,8 +1,8 @@
 package generator
 
 import (
-	"github.com/geul-org/ssac/parser"
-	"github.com/geul-org/ssac/validator"
+	"github.com/park-jun-woo/ssac/parser"
+	"github.com/park-jun-woo/ssac/validator"
 )
 
 // Target은 특정 언어의 코드 생성기가 구현해야 하는 인터페이스이다.

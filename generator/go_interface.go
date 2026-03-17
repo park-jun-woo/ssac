@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/geul-org/ssac/parser"
-	"github.com/geul-org/ssac/validator"
+	"github.com/park-jun-woo/ssac/parser"
+	"github.com/park-jun-woo/ssac/validator"
 	"github.com/ettle/strcase"
 )
 
@@ -322,7 +322,7 @@ func renderInterfaces(interfaces []derivedInterface, needQueryOpts bool) []byte 
 		buf.WriteString("\t\"time\"\n")
 	}
 	if needPagination {
-		buf.WriteString("\n\t\"github.com/geul-org/fullend/pkg/pagination\"\n")
+		buf.WriteString("\n\t\"github.com/park-jun-woo/fullend/pkg/pagination\"\n")
 	}
 	buf.WriteString(")\n\n")
 

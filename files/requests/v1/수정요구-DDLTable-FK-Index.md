@@ -1,7 +1,7 @@
 # 수정요구: DDLTable에 FK 관계 및 인덱스 정보 추가
 
 ## 요청자
-fullend (github.com/geul-org/fullend)
+fullend (github.com/park-jun-woo/fullend)
 
 ## 배경
 

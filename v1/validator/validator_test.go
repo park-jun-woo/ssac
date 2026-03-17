@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/geul-org/ssac/parser"
+	"github.com/park-jun-woo/ssac/parser"
 )
 
 func specsDir() string {

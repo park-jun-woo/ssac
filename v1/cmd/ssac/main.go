@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/geul-org/ssac/generator"
-	"github.com/geul-org/ssac/parser"
-	"github.com/geul-org/ssac/validator"
+	"github.com/park-jun-woo/ssac/generator"
+	"github.com/park-jun-woo/ssac/parser"
+	"github.com/park-jun-woo/ssac/validator"
 )
 
 func main() {

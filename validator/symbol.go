@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/ettle/strcase"
-	ssacparser "github.com/geul-org/ssac/parser"
+	ssacparser "github.com/park-jun-woo/ssac/parser"
 	"gopkg.in/yaml.v3"
 )
 

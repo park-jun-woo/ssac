@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/geul-org/ssac/parser"
-	"github.com/geul-org/ssac/validator"
+	"github.com/park-jun-woo/ssac/parser"
+	"github.com/park-jun-woo/ssac/validator"
 )
 
 func TestGenerateGet(t *testing.T) {

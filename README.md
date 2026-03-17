@@ -1,6 +1,6 @@
 # SSaC — Service Sequences as Code
 
-> **This repository is now managed as part of [fullend](https://github.com/geul-org/fullend).** All active development, issues, and contributions happen in the fullend repository. This repo remains available as a reference.
+> **This repository is now managed as part of [fullend](https://github.com/park-jun-woo/fullend).** All active development, issues, and contributions happen in the fullend repository. This repo remains available as a reference.
 
 ---
 

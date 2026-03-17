@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/geul-org/ssac/parser"
-	"github.com/geul-org/ssac/validator"
+	"github.com/park-jun-woo/ssac/parser"
+	"github.com/park-jun-woo/ssac/validator"
 )
 
 // GoTarget은 Go 언어용 코드 생성기다.

@@ -27,14 +27,14 @@ generator/
 
 ```
 변경 전:
-github.com/geul-org/ssac/artifacts/internal/parser
-github.com/geul-org/ssac/artifacts/internal/validator
-github.com/geul-org/ssac/artifacts/internal/generator
+github.com/park-jun-woo/ssac/artifacts/internal/parser
+github.com/park-jun-woo/ssac/artifacts/internal/validator
+github.com/park-jun-woo/ssac/artifacts/internal/generator
 
 변경 후:
-github.com/geul-org/ssac/parser
-github.com/geul-org/ssac/validator
-github.com/geul-org/ssac/generator
+github.com/park-jun-woo/ssac/parser
+github.com/park-jun-woo/ssac/validator
+github.com/park-jun-woo/ssac/generator
 ```
 
 ### 수정 대상 파일
@@ -108,5 +108,5 @@ ssac/
 ## 주의사항
 
 - `artifacts/` 디렉토리에는 test fixtures와 manual 문서만 남긴다
-- `go.mod`의 module path `github.com/geul-org/ssac`는 변경하지 않는다
+- `go.mod`의 module path `github.com/park-jun-woo/ssac`는 변경하지 않는다
 - 빈 `artifacts/internal/` 디렉토리는 삭제한다

@@ -87,10 +87,10 @@
 ### Handler struct 미생성
 - 수정지시서에서 Handler struct 언급하지만, 현재 SSaC 코드젠은 Handler struct를 생성하지 않음 (standalone func 패턴)
 - 따라서 `h.Auth.HashPassword(...)` 대신 `auth.HashPassword(...)` 직접 호출로 구현
-- import만 `"github.com/geul-org/ssac/internal/auth"` 추가 (또는 module path 기반)
+- import만 `"github.com/park-jun-woo/ssac/internal/auth"` 추가 (또는 module path 기반)
 
 ### module path
-- `go.mod`의 module path (`github.com/geul-org/ssac`) 활용은 코드젠 시점에서 복잡
+- `go.mod`의 module path (`github.com/park-jun-woo/ssac`) 활용은 코드젠 시점에서 복잡
 - `@func auth.verifyPassword` → import `"<configurable>/auth"` 또는 상대경로
 - 현재 코드젠은 import path를 하드코딩하지 않으므로, `@func` 패키지의 import path 결정 방식 확인 필요
 - **결정**: 생성 코드의 import에 패키지명만 추가. 실제 import path는 프로젝트 구조에 따라 fullend가 관리.
