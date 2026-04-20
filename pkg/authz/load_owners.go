@@ -8,19 +8,40 @@ import (
 	"fmt"
 )
 
+// ownerQuerier is the minimal interface satisfied by both *sql.DB and *sql.Tx.
+// It lets loadOwners switch between globalDB and a request-scoped tx without
+// branching in the row-fetch loop.
+type ownerQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // loadOwners queries DB for ownership data based on registered mappings.
 // The caller-supplied ctx is propagated into QueryRowContext so that request
 // cancellation reaches the DB driver.
+//
+// When req.Tx is non-nil, ownership reads run inside that transaction so
+// rows created earlier in the same handler are visible (MVCC snapshot
+// consistency). Otherwise globalDB is used — backward compatible for
+// read-only handlers that do not open a tx.
 func loadOwners(ctx context.Context, req CheckRequest) (map[string]interface{}, error) {
 	owners := make(map[string]interface{})
-	if globalDB == nil || len(globalOwnerships) == 0 {
+
+	var q ownerQuerier
+	if req.Tx != nil {
+		q = req.Tx
+	} else if globalDB != nil {
+		q = globalDB
+	} else {
+		return owners, nil
+	}
+	if len(globalOwnerships) == 0 {
 		return owners, nil
 	}
 
 	for _, om := range globalOwnerships {
 		var ownerID int64
 		query := fmt.Sprintf("SELECT %s FROM %s WHERE id = $1", om.Column, om.Table)
-		err := globalDB.QueryRowContext(ctx, query, req.ResourceID).Scan(&ownerID)
+		err := q.QueryRowContext(ctx, query, req.ResourceID).Scan(&ownerID)
 		if err == sql.ErrNoRows {
 			continue
 		}
