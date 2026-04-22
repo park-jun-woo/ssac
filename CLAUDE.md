@@ -14,6 +14,22 @@ ssac validate [dir]           # 내부 검증 또는 외부 SSOT 교차 검증 (
 ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블 있으면 타입 변환 + 모델 인터페이스 생성)
 ```
 
+## Git 커밋/푸시 절차
+
+1. **민감 정보 확인 필수** — 커밋 전 .env, 비밀키, 토큰, 자격증명 등 민감 정보가 포함되지 않았는지 반드시 확인한다
+2. **Co-Authored-By 금지** — 커밋 메시지에 Co-Authored-By를 절대 넣지 않는다. GitHub 사용자 목록에 claude 이름이 표시되지 않도록 주의한다
+3. **.gitignore 준수 필수** — `.gitignore`에 등록된 파일은 절대 `git add`하지 않는다. `CLAUDE.md` 등 로컬 전용 파일이 GitHub에 올라가지 않도록 반드시 확인한다
+
+## whyso
+
+매뉴얼: `~/.clari/repos/whyso/artifacts/manual-for-ai.md`
+
+1. `whyso map .` — 키워드 전체 목록 파악 (함수, endpoint, 규칙, 상태)
+2. `whyso history <file>` — 파일 수정 전 이전 변경 이유 확인
+3. `Grep "키워드"` — 맵에서 확인한 정확한 이름으로 위치 찍기
+4. 수정
+
+
 ## 계획 작성 원칙
 
 구현 전 `specs/plans/`에 계획 md를 작성한다.
@@ -29,7 +45,7 @@ ssac gen <service-dir> <out>  # validate → codegen → gofmt (심볼 테이블
 
 ## 기술 스택
 
-- Go 1.24+, module: `github.com/geul-org/ssac`
+- Go 1.24+, module: `github.com/park-jun-woo/ssac`
 - 파싱: `go/ast`, `go/parser`
 - 코드젠: `text/template`, `go/format`
 - 생성 코드 타겟: `github.com/gin-gonic/gin`
@@ -182,8 +198,3 @@ fullend 더미 (SSaC 소비자, 통합 검증용):
 - 테스트: `go test ./parser/... ./validator/... ./generator/... -count=1`
 - 테스트용 fixture는 `testdata/`에 배치. `/tmp` 등 외부 경로 사용 금지.
 
-## Git 규칙
-
-- Co-Authored-By 금지. 커밋 메시지에 AI 이름을 절대 포함하지 않는다.
-- remote: `https://github.com/geul-org/ssac.git`
-- 라이선스: MIT
