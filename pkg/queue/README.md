@@ -73,11 +73,33 @@ CREATE TABLE fullend_queue (
     status       TEXT NOT NULL DEFAULT 'pending',  -- pending/done/failed
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deliver_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    processed_at TIMESTAMPTZ
+    processed_at TIMESTAMPTZ,
+    traceparent  TEXT NOT NULL DEFAULT ''          -- W3C TraceContext (Phase009)
 );
 CREATE INDEX idx_fullend_queue_pending
   ON fullend_queue (topic, status, deliver_at) WHERE status = 'pending';
 ```
+
+기존 배포는 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS traceparent` 를
+`Init` 시점에 자동 적용하므로 마이그레이션 수동 작업은 필요 없다.
+
+## Span propagation (W3C TraceContext)
+
+`Publish` / `PublishTx` 는 호출 시점 `ctx` 의 활성 span 에서
+[W3C `traceparent`](https://www.w3.org/TR/trace-context/) 헤더를 추출해
+`fullend_queue.traceparent` 컬럼에 저장한다. 폴러(`pollOnce`)는 저장된
+값을 다시 `SpanContext` 로 복원한 뒤 구독자 핸들러에 전달하므로,
+publish → dispatch 가 같은 분산 trace 에 연결된다.
+
+- 애플리케이션이 `otel.SetTracerProvider` 를 호출하지 않아도 패키지는
+  안전하다 — `traceparent` 가 빈 문자열로 저장되고, 복원은 no-op 이다.
+- 전파기는 `otel.GetTextMapPropagator()` (기본값: 글로벌 등록된
+  propagator). `propagation.TraceContext{}` 를 등록하면 표준 포맷이
+  그대로 사용된다. 다른 전파기(Baggage 등)를 쓰더라도 `traceparent`
+  키만 컬럼에 저장되므로 포맷 충돌은 없다.
+- 계측 라이브러리(예: `otelhttp`, `otelgin`)가 요청 스팬을 이미 연
+  ctx 를 핸들러에 전달하면 `@publish` 코드젠이 `ctx` 를 그대로
+  전달하므로 추가 코드 없이 연결된다.
 
 ## 사용 예시
 

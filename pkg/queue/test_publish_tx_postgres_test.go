@@ -118,14 +118,18 @@ func TestPublishTxPostgresBindsToTx(t *testing.T) {
 	if !strings.Contains(conn.lastSQL, "INSERT INTO fullend_queue") {
 		t.Errorf("unexpected SQL: %q", conn.lastSQL)
 	}
-	if len(conn.lastArgs) != 4 {
-		t.Fatalf("expected 4 args (topic,payload,priority,deliver_at), got %d", len(conn.lastArgs))
+	if len(conn.lastArgs) != 5 {
+		t.Fatalf("expected 5 args (topic,payload,priority,deliver_at,traceparent), got %d", len(conn.lastArgs))
 	}
 	if got := conn.lastArgs[0]; got != "order.created" {
 		t.Errorf("topic arg = %v, want order.created", got)
 	}
 	if got := conn.lastArgs[2]; got != "high" {
 		t.Errorf("priority arg = %v, want high", got)
+	}
+	// traceparent is empty when no active span — column carries "" by contract.
+	if got := conn.lastArgs[4]; got != "" {
+		t.Errorf("traceparent arg = %v, want empty (no active span)", got)
 	}
 
 	if err := tx.Commit(); err != nil {

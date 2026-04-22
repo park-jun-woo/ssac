@@ -41,8 +41,9 @@ func PublishTx(ctx context.Context, tx *sql.Tx, topic string, payload any, opts 
 		if tx == nil {
 			return errors.New("queue: PublishTx requires a non-nil *sql.Tx")
 		}
+		tp := extractTraceparent(ctx)
 		_, err := tx.ExecContext(ctx, insertQueueSQL,
-			topic, data, cfg.priority, deliverAtFor(cfg))
+			topic, data, cfg.priority, deliverAtFor(cfg), tp)
 		return err
 	case "memory":
 		return ErrTxUnsupported
