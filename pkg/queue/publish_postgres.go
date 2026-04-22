@@ -7,14 +7,22 @@ import (
 	"time"
 )
 
-func publishPostgres(ctx context.Context, topic string, data []byte, cfg publishConfig) error {
+// insertQueueSQL is shared by publishPostgres (db-bound) and PublishTx (tx-bound).
+const insertQueueSQL = `
+	INSERT INTO fullend_queue (topic, payload, priority, deliver_at)
+	VALUES ($1, $2, $3, $4)`
+
+// deliverAtFor computes the deliver_at timestamp from publishConfig.
+func deliverAtFor(cfg publishConfig) time.Time {
 	deliverAt := time.Now()
 	if cfg.delay > 0 {
 		deliverAt = deliverAt.Add(time.Duration(cfg.delay) * time.Second)
 	}
-	_, err := db.ExecContext(ctx, `
-		INSERT INTO fullend_queue (topic, payload, priority, deliver_at)
-		VALUES ($1, $2, $3, $4)`,
-		topic, data, cfg.priority, deliverAt)
+	return deliverAt
+}
+
+func publishPostgres(ctx context.Context, topic string, data []byte, cfg publishConfig) error {
+	_, err := db.ExecContext(ctx, insertQueueSQL,
+		topic, data, cfg.priority, deliverAtFor(cfg))
 	return err
 }
