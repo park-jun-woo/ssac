@@ -34,6 +34,9 @@ import (
 // implementation because the reuse-policy is orthogonal to persistence.
 func RefreshRotate(ctx context.Context, store RefreshStore, refreshToken string, detectReuseLogoutAll bool) (RefreshRotateResponse, error) {
 	if store == nil {
+		store = currentStore()
+	}
+	if store == nil {
 		return RefreshRotateResponse{}, errors.New("auth: refresh store not configured")
 	}
 	if refreshToken == "" {

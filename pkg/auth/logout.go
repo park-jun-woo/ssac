@@ -17,6 +17,9 @@ import (
 // canonical POST /auth/logout endpoint.
 func Logout(ctx context.Context, store RefreshStore, refreshToken string) (LogoutResponse, error) {
 	if store == nil {
+		store = currentStore()
+	}
+	if store == nil {
 		return LogoutResponse{}, errors.New("auth: refresh store not configured")
 	}
 	if refreshToken == "" {
