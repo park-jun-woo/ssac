@@ -17,12 +17,15 @@ import "context"
 //
 // Owners is the caller-loaded ownership lookup table. Keys are resource
 // names (matching the `@ownership <resource>:` declarations in the Rego
-// policy) and values are maps from resource-id to owner-id. Both ID types
-// are stringified so the policy can compare `data.owners.<resource>[id] ==
-// input.claims.user_id` without caring about the underlying column type
-// (int64 / string / uuid). The handler is responsible for populating this
-// map (typically via a yongol-generated `OwnerLookup<Resource>` sqlc query
-// called under the request's pgx.Tx for MVCC-consistent reads).
+// policy) and values are maps from resource-id to owner-id. Outer and inner
+// keys are strings because OPA's in-memory store and JSON object keys are
+// string-only, so callers stringify the resource-id when populating the
+// inner map (typically `fmt.Sprint(id)`). The owner-id value is typed as
+// `any` so its natural Go type is marshalled verbatim into rego input —
+// an `int64` owner column stays a JSON number, a `uuid` column stays a
+// JSON string, and rego policies compare it directly against the matching
+// claim (`data.owners.<resource>[id] == input.claims.user_id`) without an
+// extra stringification layer.
 //
 // Since ssac does not touch the database, all DB-dependent fields
 // (`*sql.Tx`, `*sql.DB`) have been removed; the caller is the single
@@ -33,5 +36,5 @@ type CheckRequest struct {
 	Resource   string
 	ResourceID int64
 	Claim      any
-	Owners     map[string]map[string]string
+	Owners     map[string]map[string]any
 }

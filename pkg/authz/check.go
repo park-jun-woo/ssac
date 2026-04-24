@@ -20,9 +20,10 @@ import (
 // req.Owners is the caller-populated ownership lookup. Typically the handler
 // runs a yongol-generated `OwnerLookup<Resource>` sqlc query under the
 // request's pgx.Tx before calling Check, then places the result into
-// `req.Owners[resource][resourceID] = ownerID`. Both keys and values are
-// strings so the rego policy can compare `data.owners.<resource>[id] ==
-// input.claims.user_id` without caring about column types.
+// `req.Owners[resource][fmt.Sprint(resourceID)] = ownerID`. The owner-id
+// value is typed as `any`, so its native Go type (int64 / uuid / string)
+// is marshalled verbatim into rego input and compared directly against the
+// matching claim.
 func Check(req CheckRequest) (CheckResponse, error) {
 	if os.Getenv("DISABLE_AUTHZ") == "1" {
 		return CheckResponse{}, nil
@@ -40,7 +41,7 @@ func Check(req CheckRequest) (CheckResponse, error) {
 
 	owners := req.Owners
 	if owners == nil {
-		owners = map[string]map[string]string{}
+		owners = map[string]map[string]any{}
 	}
 
 	var claims any = req.Claim
