@@ -18,7 +18,7 @@ type memoryBackend struct{}
 
 func newMemoryBackend() Backend { return &memoryBackend{} }
 
-func (m *memoryBackend) Publish(ctx context.Context, topic string, data []byte, _ publishConfig) error {
+func (m *memoryBackend) Publish(ctx context.Context, topic string, data []byte, _ PublishConfig) error {
 	mu.RLock()
 	hs := handlers[topic]
 	mu.RUnlock()
@@ -30,6 +30,6 @@ func (m *memoryBackend) Publish(ctx context.Context, topic string, data []byte, 
 	return nil
 }
 
-func (m *memoryBackend) PublishTx(_ context.Context, _ any, _ string, _ []byte, _ publishConfig) error {
+func (m *memoryBackend) PublishTx(_ context.Context, _ any, _ string, _ []byte, _ PublishConfig) error {
 	return ErrTxUnsupported
 }

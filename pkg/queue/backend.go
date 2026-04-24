@@ -19,10 +19,10 @@ type Backend interface {
 	// Publish enqueues a serialized payload on topic with the supplied
 	// delivery config. The memory backend dispatches handlers synchronously;
 	// durable backends persist the row and return.
-	Publish(ctx context.Context, topic string, data []byte, cfg publishConfig) error
+	Publish(ctx context.Context, topic string, data []byte, cfg PublishConfig) error
 
 	// PublishTx enqueues inside the caller's transaction. tx is driver-
 	// specific; backends that do not support transactional publishing
 	// (e.g. memory) return ErrTxUnsupported.
-	PublishTx(ctx context.Context, tx any, topic string, data []byte, cfg publishConfig) error
+	PublishTx(ctx context.Context, tx any, topic string, data []byte, cfg PublishConfig) error
 }

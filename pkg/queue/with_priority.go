@@ -4,5 +4,5 @@ package queue
 
 // WithPriority sets the message priority ("high", "normal", "low").
 func WithPriority(p string) PublishOption {
-	return func(c *publishConfig) { c.priority = p }
+	return func(c *PublishConfig) { c.Priority = p }
 }

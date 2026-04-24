@@ -4,5 +4,5 @@ package queue
 
 // WithDelay sets the delivery delay in seconds.
 func WithDelay(seconds int) PublishOption {
-	return func(c *publishConfig) { c.delay = seconds }
+	return func(c *PublishConfig) { c.Delay = seconds }
 }

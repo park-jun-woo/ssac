@@ -3,4 +3,4 @@
 package queue
 
 // PublishOption configures a Publish call.
-type PublishOption func(*publishConfig)
+type PublishOption func(*PublishConfig)
