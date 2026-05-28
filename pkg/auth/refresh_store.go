@@ -25,8 +25,9 @@ type ClaimMatcher map[string]any
 // RefreshStore persists sha256-hashed refresh tokens for one-time-use
 // rotation. The plaintext refresh token is never stored. Implementations are
 // injected by yongol codegen from the user's sqlc Queries (interface.yaml
-// ports RefreshTokenInsert / RefreshTokenFindByHash / RefreshTokenRevoke /
-// RefreshTokenRevokeAll) or provided via NewMemoryRefreshStore for tests.
+// ports RefreshTokenInsert / RefreshTokenConsume / RefreshTokenCheckReuse /
+// RefreshTokenRevoke / RefreshTokenRevokeAll) or provided via
+// NewMemoryRefreshStore for tests.
 type RefreshStore interface {
 	// Create persists a new refresh token. token is the plaintext JWT
 	// returned to the client; only its hash is stored. claims is marshaled

@@ -27,18 +27,27 @@ ports:
         - { name: claims, type: "[]byte" }
         - { name: expires_at, type: "time.Time" }
 
-  - name: RefreshTokenFindByHash
-    description: "hash 로 refresh token 행 조회 (Consume 의 SELECT 단계)"
+  - name: RefreshTokenConsume
+    description: "CTE 로 refresh token 을 원자적으로 소비 (UPDATE + RETURNING claims)"
     when: manifest.backend.auth.refresh.enabled
-    used_by: [RefreshRotate, Logout]
+    used_by: [RefreshRotate]
     query:
       cardinality: one
       params:
         - { name: token_hash, type: string }
       returns:
         - { name: claims, type: "[]byte" }
-        - { name: expires_at, type: "time.Time" }
-        - { name: revoked_at, type: "*time.Time" }
+
+  - name: RefreshTokenCheckReuse
+    description: "이미 소비된(revoked) refresh token 존재 여부 확인 (reuse detection)"
+    when: manifest.backend.auth.refresh.enabled
+    used_by: [RefreshRotate]
+    query:
+      cardinality: one
+      params:
+        - { name: token_hash, type: string }
+      returns:
+        - { name: claims, type: "[]byte" }
 
   - name: RefreshTokenRevoke
     description: "refresh token 을 revoked 로 마킹 (idempotent — WHERE revoked_at IS NULL)"
@@ -76,8 +85,16 @@ canonical_queries: |
   INSERT INTO refresh_tokens (token_hash, claims, expires_at)
   VALUES (@token_hash, @claims, @expires_at);
 
-  -- name: RefreshTokenFindByHash :one
-  SELECT claims, expires_at, revoked_at FROM refresh_tokens WHERE token_hash = @token_hash;
+  -- name: RefreshTokenConsume :one
+  WITH consumed AS (
+      UPDATE refresh_tokens SET revoked_at = NOW()
+      WHERE token_hash = @token_hash AND revoked_at IS NULL AND expires_at > NOW()
+      RETURNING claims
+  )
+  SELECT claims FROM consumed;
+
+  -- name: RefreshTokenCheckReuse :one
+  SELECT claims FROM refresh_tokens WHERE token_hash = @token_hash AND revoked_at IS NOT NULL;
 
   -- name: RefreshTokenRevoke :exec
   UPDATE refresh_tokens SET revoked_at = NOW()
